@@ -1,0 +1,58 @@
+name: Build PhotoStudioApp
+
+# Builds the app and the Inno Setup installer on a real, free GitHub-hosted
+# Windows runner - no Visual Studio or Inno Setup install needed on your own
+# PC. Trigger it by pushing to main/master, or manually from the Actions tab
+# ("Run workflow" button, thanks to workflow_dispatch below).
+#
+# When it finishes (a couple of minutes), open the run from the Actions tab
+# and scroll down to "Artifacts" - you'll find:
+#   - PhotoStudioApp-Installer  -> contains PhotoStudioApp-Setup.exe
+#   - PhotoStudioApp-Portable   -> the raw bin\Release folder (xcopy build)
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup NuGet
+        uses: nuget/setup-nuget@v2
+        with:
+          nuget-version: 'latest'
+
+      - name: Restore NuGet packages
+        run: nuget restore PhotoStudioApp.sln
+
+      - name: Build (Release | x86)
+        run: msbuild PhotoStudioApp.sln /p:Configuration=Release /p:Platform=x86 /t:Rebuild /m
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Compile installer
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\PhotoStudioApp.iss
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PhotoStudioApp-Installer
+          path: installer\Output\PhotoStudioApp-Setup.exe
+
+      - name: Upload portable build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PhotoStudioApp-Portable
+          path: PhotoStudioApp\bin\Release\**

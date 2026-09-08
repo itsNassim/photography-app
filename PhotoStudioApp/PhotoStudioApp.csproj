@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
+    <ProjectGuid>{A1B2C3D4-1111-2222-3333-444455556666}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>PhotoStudioApp</RootNamespace>
+    <AssemblyName>PhotoStudioApp</AssemblyName>
+    <!-- IMPORTANT: keep at 4.8. Do NOT upgrade to .NET 5+/Core — those dropped Windows 7 support. -->
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <Deterministic>true</Deterministic>
+    <ApplicationIcon>Properties\app.ico</ApplicationIcon>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
+    <PlatformTarget>x86</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
+    <PlatformTarget>x86</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
+    <Reference Include="System.Xml.Linq" />
+    <!-- Restored from NuGet: System.Data.SQLite.Core (last version with full .NET Framework 4.x + Win7 x86/x64 native interop) -->
+    <Reference Include="System.Data.SQLite">
+      <HintPath>..\packages\System.Data.SQLite.Core.1.0.118\lib\net46\System.Data.SQLite.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Models\Category.cs" />
+    <Compile Include="Models\StockItem.cs" />
+    <Compile Include="Models\CustomCharge.cs" />
+    <Compile Include="Models\DailyClose.cs" />
+    <Compile Include="Models\AppSettings.cs" />
+    <Compile Include="Data\Db.cs" />
+    <Compile Include="Data\SchemaInitializer.cs" />
+    <Compile Include="Data\CategoryRepository.cs" />
+    <Compile Include="Data\StockRepository.cs" />
+    <Compile Include="Data\CustomChargeRepository.cs" />
+    <Compile Include="Data\DailyCloseRepository.cs" />
+    <Compile Include="Data\SettingsRepository.cs" />
+    <Compile Include="Services\PasswordService.cs" />
+    <Compile Include="Services\FolderCountService.cs" />
+    <Compile Include="Services\ClosingService.cs" />
+    <Compile Include="Services\ReportPrintService.cs" />
+    <Compile Include="Services\WorkdayCalculator.cs" />
+    <Compile Include="UI\Theme.cs" />
+    <Compile Include="UI\MainForm.cs" />
+    <Compile Include="UI\HomeTab.cs" />
+    <Compile Include="UI\StockTab.cs" />
+    <Compile Include="UI\CategoriesTab.cs" />
+    <Compile Include="UI\HistoryTab.cs" />
+    <Compile Include="UI\SettingsTab.cs" />
+    <Compile Include="UI\Dialogs\AddEditCategoryDialog.cs" />
+    <Compile Include="UI\Dialogs\AddEditStockDialog.cs" />
+    <Compile Include="UI\Dialogs\AddCustomChargeDialog.cs" />
+    <Compile Include="UI\Dialogs\PasswordPromptDialog.cs" />
+    <Compile Include="UI\Dialogs\SetPasswordDialog.cs" />
+    <Compile Include="UI\Dialogs\BreakdownReportForm.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="App.config" />
+    <None Include="packages.config" />
+    <Content Include="Properties\app.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!-- NuGet restore target import (added automatically by NuGet when opened in Visual Studio) -->
+  <Import Project="..\packages\System.Data.SQLite.Core.1.0.118\build\net46\System.Data.SQLite.Core.targets" Condition="Exists('..\packages\System.Data.SQLite.Core.1.0.118\build\net46\System.Data.SQLite.Core.targets')" />
+</Project>
