@@ -5,7 +5,17 @@ name: Build PhotoStudioApp
 # PC. Trigger it by pushing to main/master, or manually from the Actions tab
 # ("Run workflow" button, thanks to workflow_dispatch below).
 #
-# When it finishes (a couple of minutes), open the run from the Actions tab
+# This version does NOT use "nuget restore" (it proved flaky in CI for
+# packages.config-style projects). Instead it downloads the exact
+# System.Data.SQLite.Core NuGet package directly from nuget.org and unpacks
+# it into the "packages" folder the .csproj's <HintPath> expects - fully
+# deterministic, no dependency on nuget.exe's restore behavior.
+#
+# It also locates PhotoStudioApp.sln and installer\PhotoStudioApp.iss
+# wherever they actually are in the repo, so an extra nesting level from a
+# drag-and-drop upload doesn't break anything.
+#
+# When the run finishes (a couple of minutes), open it from the Actions tab
 # and scroll down to "Artifacts" - you'll find:
 #   - PhotoStudioApp-Installer  -> contains PhotoStudioApp-Setup.exe
 #   - PhotoStudioApp-Portable   -> the raw bin\Release folder (xcopy build)
@@ -26,16 +36,62 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Setup NuGet
-        uses: nuget/setup-nuget@v2
-        with:
-          nuget-version: 'latest'
+      - name: Locate project files
+        shell: pwsh
+        run: |
+          $sln = Get-ChildItem -Path . -Filter "PhotoStudioApp.sln" -Recurse | Select-Object -First 1
+          if (-not $sln) {
+            Write-Host "Repository contents (for debugging):"
+            Get-ChildItem -Path . -Recurse -Depth 3 | ForEach-Object { Write-Host $_.FullName }
+            throw "Could not find PhotoStudioApp.sln anywhere in the repository."
+          }
 
-      - name: Restore NuGet packages
-        run: nuget restore PhotoStudioApp.sln
+          $iss = Get-ChildItem -Path . -Filter "PhotoStudioApp.iss" -Recurse | Select-Object -First 1
+          if (-not $iss) {
+            throw "Found PhotoStudioApp.sln at $($sln.FullName) but could not find installer\PhotoStudioApp.iss anywhere in the repository."
+          }
+
+          $csproj = Get-ChildItem -Path . -Filter "PhotoStudioApp.csproj" -Recurse | Select-Object -First 1
+          if (-not $csproj) {
+            throw "Could not find PhotoStudioApp.csproj anywhere in the repository."
+          }
+
+          Write-Host "Found solution:  $($sln.FullName)"
+          Write-Host "Found project:   $($csproj.FullName)"
+          Write-Host "Found installer: $($iss.FullName)"
+
+          "SLN_PATH=$($sln.FullName)"       | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "ISS_PATH=$($iss.FullName)"       | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "SOLUTION_DIR=$($sln.DirectoryName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Restore System.Data.SQLite.Core (direct download, not nuget restore)
+        shell: pwsh
+        run: |
+          $pkgId = "System.Data.SQLite.Core"
+          $pkgVersion = "1.0.118"
+          $packagesDir = Join-Path $env:SOLUTION_DIR "packages"
+          $pkgDir = Join-Path $packagesDir "$pkgId.$pkgVersion"
+          $expectedDll = Join-Path $pkgDir "lib\net46\System.Data.SQLite.dll"
+
+          New-Item -ItemType Directory -Force -Path $packagesDir | Out-Null
+          $zipPath = Join-Path $env:RUNNER_TEMP "$pkgId.$pkgVersion.nupkg.zip"
+
+          Write-Host "Downloading $pkgId $pkgVersion from nuget.org ..."
+          Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/$pkgId/$pkgVersion" -OutFile $zipPath -UseBasicParsing
+
+          Write-Host "Extracting into $pkgDir ..."
+          Expand-Archive -Path $zipPath -DestinationPath $pkgDir -Force
+
+          if (-not (Test-Path $expectedDll)) {
+            Write-Host "Package contents (for debugging):"
+            Get-ChildItem -Recurse $pkgDir | ForEach-Object { Write-Host $_.FullName }
+            throw "Downloaded the package but did not find the expected DLL at $expectedDll. See the file listing above - the PhotoStudioApp.csproj HintPath may need updating to match."
+          }
+
+          Write-Host "OK - found $expectedDll"
 
       - name: Build (Release | x86)
-        run: msbuild PhotoStudioApp.sln /p:Configuration=Release /p:Platform=x86 /t:Rebuild /m
+        run: msbuild "${{ env.SLN_PATH }}" /p:Configuration=Release /p:Platform=x86 /t:Rebuild /m
 
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
@@ -43,16 +99,16 @@ jobs:
       - name: Compile installer
         shell: pwsh
         run: |
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\PhotoStudioApp.iss
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "${{ env.ISS_PATH }}"
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
           name: PhotoStudioApp-Installer
-          path: installer\Output\PhotoStudioApp-Setup.exe
+          path: "**/installer/Output/PhotoStudioApp-Setup.exe"
 
       - name: Upload portable build artifact
         uses: actions/upload-artifact@v4
         with:
           name: PhotoStudioApp-Portable
-          path: PhotoStudioApp\bin\Release\**
+          path: "**/PhotoStudioApp/bin/Release/**"

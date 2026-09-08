@@ -11,7 +11,9 @@
     - Visual Studio 2019/2022 Build Tools (or full VS) with the
       ".NET desktop development" workload, which includes the
       .NET Framework 4.8 targeting pack.
-    - NuGet.exe on PATH, or VS's built-in NuGet restore.
+    - Internet access to nuget.org (this script downloads the
+      System.Data.SQLite.Core package directly, deterministically -
+      it does not rely on "nuget.exe restore").
 
   The resulting bin\Release folder is a portable, xcopy-deployable build -
   copy it to the Windows 7 machine as-is (no installer required), or wrap it
@@ -27,25 +29,29 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path | Split-Path -Parent
 Set-Location $root
 
-Write-Host "== Restoring NuGet packages ==" -ForegroundColor Cyan
-$toolsDir = Join-Path $root ".tools"
-$localNuget = Join-Path $toolsDir "nuget.exe"
-$nuget = Get-Command nuget.exe -ErrorAction SilentlyContinue
-if (-not $nuget -and (Test-Path $localNuget)) {
-    $nuget = Get-Command $localNuget -ErrorAction SilentlyContinue
-}
-if (-not $nuget) {
-    Write-Host "nuget.exe not found - downloading a local copy to .tools\nuget.exe ..." -ForegroundColor Yellow
-    New-Item -ItemType Directory -Force -Path $toolsDir | Out-Null
-    try {
-        Invoke-WebRequest -Uri "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe" -OutFile $localNuget -UseBasicParsing
-        $nuget = Get-Command $localNuget -ErrorAction SilentlyContinue
-    } catch {
-        Write-Warning "Could not download nuget.exe automatically ($($_.Exception.Message)). Continuing and hoping the package is already restored..."
+Write-Host "== Restoring System.Data.SQLite.Core (direct download, not nuget restore) ==" -ForegroundColor Cyan
+$pkgId = "System.Data.SQLite.Core"
+$pkgVersion = "1.0.118"
+$packagesDir = Join-Path $root "packages"
+$pkgDir = Join-Path $packagesDir "$pkgId.$pkgVersion"
+$expectedDll = Join-Path $pkgDir "lib\net46\System.Data.SQLite.dll"
+
+if (Test-Path $expectedDll) {
+    Write-Host "Already present at $expectedDll - skipping download." -ForegroundColor Green
+} else {
+    New-Item -ItemType Directory -Force -Path $packagesDir | Out-Null
+    $zipPath = Join-Path $env:TEMP "$pkgId.$pkgVersion.nupkg.zip"
+    Write-Host "Downloading $pkgId $pkgVersion from nuget.org ..."
+    Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/$pkgId/$pkgVersion" -OutFile $zipPath -UseBasicParsing
+    Write-Host "Extracting into $pkgDir ..."
+    Expand-Archive -Path $zipPath -DestinationPath $pkgDir -Force
+
+    if (-not (Test-Path $expectedDll)) {
+        Write-Host "Package contents (for debugging):"
+        Get-ChildItem -Recurse $pkgDir | ForEach-Object { Write-Host $_.FullName }
+        throw "Downloaded the package but did not find the expected DLL at $expectedDll. Check the file listing above against PhotoStudioApp.csproj's HintPath."
     }
-}
-if ($nuget) {
-    & $nuget restore PhotoStudioApp.sln
+    Write-Host "OK - restored to $expectedDll" -ForegroundColor Green
 }
 
 Write-Host "== Locating msbuild.exe ==" -ForegroundColor Cyan
