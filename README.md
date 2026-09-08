@@ -11,7 +11,9 @@ Runs on **Windows 7 SP1 and above** (32-bit and 64-bit).
 - **C# WinForms on .NET Framework 4.8** - the last Framework version, fully
   supported on Windows 7 SP1. Do **not** retarget this project to .NET 5/6/7/8/9 -
   those dropped Windows 7 support entirely.
-- **SQLite** via the `System.Data.SQLite.Core` NuGet package - a single local
+- **SQLite** via the `Stub.System.Data.SQLite.Core.NetFramework` NuGet package
+  (the actual assets - `System.Data.SQLite.Core` itself is an empty
+  meta-package as of version 1.0.116+) - a single local
   `studio.db` file holds categories, prices (with full price history), stock,
   custom charges, and every closed day's history, so reports stay queryable.
 - No internet/cloud dependency. Everything runs locally.
@@ -69,8 +71,11 @@ You need a **Windows machine** (or a Windows VM) with **Visual Studio 2019 or 20
 installed - that workload includes the .NET Framework 4.8 targeting pack.
 
 1. Open `PhotoStudioApp.sln` in Visual Studio.
-2. Let it restore the NuGet package (`System.Data.SQLite.Core`) - this happens
-   automatically on load, or right-click the solution → "Restore NuGet Packages".
+2. This project restores its one NuGet dependency
+   (`Stub.System.Data.SQLite.Core.NetFramework`) by direct download rather than
+   Visual Studio's automatic restore (that flow proved unreliable in CI) - run
+   `.\build\publish.ps1` once first (it downloads and unpacks the package), or
+   see that script's restore step if you'd rather do it by hand.
 3. Set the solution platform to **x86** (top toolbar) - this matches the
    `PlatformTarget` in the project and keeps the native SQLite interop DLL
    selection simple across 32-bit and 64-bit Windows 7.

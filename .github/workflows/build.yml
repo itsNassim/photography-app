@@ -7,9 +7,11 @@ name: Build PhotoStudioApp
 #
 # This version does NOT use "nuget restore" (it proved flaky in CI for
 # packages.config-style projects). Instead it downloads the exact
-# System.Data.SQLite.Core NuGet package directly from nuget.org and unpacks
-# it into the "packages" folder the .csproj's <HintPath> expects - fully
-# deterministic, no dependency on nuget.exe's restore behavior.
+# Stub.System.Data.SQLite.Core.NetFramework NuGet package directly from
+# nuget.org and unpacks it into the "packages" folder the .csproj's
+# <HintPath> expects - fully deterministic, no dependency on nuget.exe's
+# restore behavior. (System.Data.SQLite.Core itself is an empty meta-package
+# as of 1.0.116+ - the real assets live in the Stub package instead.)
 #
 # It also locates PhotoStudioApp.sln and installer\PhotoStudioApp.iss
 # wherever they actually are in the repo, so an extra nesting level from a
@@ -64,14 +66,20 @@ jobs:
           "ISS_PATH=$($iss.FullName)"       | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "SOLUTION_DIR=$($sln.DirectoryName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-      - name: Restore System.Data.SQLite.Core (direct download, not nuget restore)
+      - name: Restore Stub.System.Data.SQLite.Core.NetFramework (direct download, not nuget restore)
         shell: pwsh
         run: |
-          $pkgId = "System.Data.SQLite.Core"
+          # NOTE: "System.Data.SQLite.Core" is an empty meta-package as of 1.0.116+ -
+          # the real .NET Framework assets (managed DLL + native SQLite.Interop.dll)
+          # live in this package instead. See PhotoStudioApp.csproj for the matching
+          # Reference/HintPath and the CopySQLiteInteropFilesOurselves target.
+          $pkgId = "Stub.System.Data.SQLite.Core.NetFramework"
           $pkgVersion = "1.0.118"
           $packagesDir = Join-Path $env:SOLUTION_DIR "packages"
           $pkgDir = Join-Path $packagesDir "$pkgId.$pkgVersion"
           $expectedDll = Join-Path $pkgDir "lib\net46\System.Data.SQLite.dll"
+          $expectedInteropX86 = Join-Path $pkgDir "build\net46\x86\SQLite.Interop.dll"
+          $expectedInteropX64 = Join-Path $pkgDir "build\net46\x64\SQLite.Interop.dll"
 
           New-Item -ItemType Directory -Force -Path $packagesDir | Out-Null
           $zipPath = Join-Path $env:RUNNER_TEMP "$pkgId.$pkgVersion.nupkg.zip"
@@ -82,13 +90,19 @@ jobs:
           Write-Host "Extracting into $pkgDir ..."
           Expand-Archive -Path $zipPath -DestinationPath $pkgDir -Force
 
-          if (-not (Test-Path $expectedDll)) {
-            Write-Host "Package contents (for debugging):"
-            Get-ChildItem -Recurse $pkgDir | ForEach-Object { Write-Host $_.FullName }
-            throw "Downloaded the package but did not find the expected DLL at $expectedDll. See the file listing above - the PhotoStudioApp.csproj HintPath may need updating to match."
-          }
+          Write-Host "Package contents:"
+          Get-ChildItem -Recurse $pkgDir | ForEach-Object { Write-Host $_.FullName }
 
-          Write-Host "OK - found $expectedDll"
+          if (-not (Test-Path $expectedDll)) {
+            throw "Downloaded the package but did not find the expected DLL at $expectedDll. See the file listing above - PhotoStudioApp.csproj's HintPath may need updating to match the real layout."
+          }
+          Write-Host "OK - found managed DLL at $expectedDll"
+
+          if (-not (Test-Path $expectedInteropX86) -and -not (Test-Path $expectedInteropX64)) {
+            Write-Warning "Did not find SQLite.Interop.dll under build\net46\x86 or x64 - see file listing above. The app will fail at runtime (not at compile time) if this is wrong."
+          } else {
+            Write-Host "OK - found native interop DLL(s)."
+          }
 
       - name: Build (Release | x86)
         run: msbuild "${{ env.SLN_PATH }}" /p:Configuration=Release /p:Platform=x86 /t:Rebuild /m

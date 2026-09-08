@@ -29,8 +29,11 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path | Split-Path -Parent
 Set-Location $root
 
-Write-Host "== Restoring System.Data.SQLite.Core (direct download, not nuget restore) ==" -ForegroundColor Cyan
-$pkgId = "System.Data.SQLite.Core"
+Write-Host "== Restoring Stub.System.Data.SQLite.Core.NetFramework (direct download, not nuget restore) ==" -ForegroundColor Cyan
+# NOTE: "System.Data.SQLite.Core" is an empty meta-package as of 1.0.116+ - the real
+# .NET Framework assets (managed DLL + native SQLite.Interop.dll) live in this
+# package instead. See PhotoStudioApp.csproj for the matching Reference/HintPath.
+$pkgId = "Stub.System.Data.SQLite.Core.NetFramework"
 $pkgVersion = "1.0.118"
 $packagesDir = Join-Path $root "packages"
 $pkgDir = Join-Path $packagesDir "$pkgId.$pkgVersion"

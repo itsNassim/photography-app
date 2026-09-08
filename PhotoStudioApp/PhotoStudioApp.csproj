@@ -14,6 +14,14 @@
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>true</Deterministic>
     <ApplicationIcon>Properties\app.ico</ApplicationIcon>
+    <!-- As of System.Data.SQLite.Core 1.0.116+, that package is an empty meta-package -
+         the actual managed DLL and native SQLite.Interop.dll live in
+         Stub.System.Data.SQLite.Core.NetFramework instead. This property points at it;
+         see the Reference below and the CopySQLiteInteropFiles target near the bottom
+         of this file, which copies the native DLL ourselves instead of relying on that
+         package's own build target (which has known flakiness in headless/CI builds). -->
+    <SQLiteStubPackageDir>..\packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.118\build\net46\</SQLiteStubPackageDir>
+    <ContentSQLiteInteropFiles>true</ContentSQLiteInteropFiles>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
     <PlatformTarget>x86</PlatformTarget>
@@ -43,9 +51,11 @@
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
     <Reference Include="System.Xml.Linq" />
-    <!-- Restored from NuGet: System.Data.SQLite.Core (last version with full .NET Framework 4.x + Win7 x86/x64 native interop) -->
+    <!-- Restored directly (not via "nuget restore") from Stub.System.Data.SQLite.Core.NetFramework -
+         the package that actually contains the .NET Framework assets. See SQLiteStubPackageDir above. -->
     <Reference Include="System.Data.SQLite">
-      <HintPath>..\packages\System.Data.SQLite.Core.1.0.118\lib\net46\System.Data.SQLite.dll</HintPath>
+      <HintPath>..\packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.118\lib\net46\System.Data.SQLite.dll</HintPath>
+      <Private>True</Private>
     </Reference>
   </ItemGroup>
   <ItemGroup>
@@ -90,6 +100,25 @@
     </Content>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <!-- NuGet restore target import (added automatically by NuGet when opened in Visual Studio) -->
-  <Import Project="..\packages\System.Data.SQLite.Core.1.0.118\build\net46\System.Data.SQLite.Core.targets" Condition="Exists('..\packages\System.Data.SQLite.Core.1.0.118\build\net46\System.Data.SQLite.Core.targets')" />
+
+  <!-- Best-effort: the Stub package's own build target, if MSBuild honors it. -->
+  <Import Project="$(SQLiteStubPackageDir)Stub.System.Data.SQLite.Core.NetFramework.targets" Condition="Exists('$(SQLiteStubPackageDir)Stub.System.Data.SQLite.Core.NetFramework.targets')" />
+
+  <!-- Guaranteed fallback: this package's own copy-to-output target is known to be flaky
+       in headless/CI builds (silently skips copying SQLite.Interop.dll in some MSBuild
+       versions - see sqlite.org forum discussions on this exact package). Rather than
+       depend on that working, copy the native interop DLLs to the output's x86\ and x64\
+       subfolders ourselves, every build, unconditionally. App.config's <probing> element
+       already tells the runtime to look in x86\ and x64\ next to the exe. -->
+  <Target Name="CopySQLiteInteropFilesOurselves" AfterTargets="Build;Rebuild">
+    <ItemGroup>
+      <_SQLiteInteropX86 Include="$(SQLiteStubPackageDir)x86\SQLite.Interop.dll" Condition="Exists('$(SQLiteStubPackageDir)x86\SQLite.Interop.dll')" />
+      <_SQLiteInteropX64 Include="$(SQLiteStubPackageDir)x64\SQLite.Interop.dll" Condition="Exists('$(SQLiteStubPackageDir)x64\SQLite.Interop.dll')" />
+    </ItemGroup>
+    <MakeDir Directories="$(OutDir)x86" Condition="'@(_SQLiteInteropX86)' != ''" />
+    <MakeDir Directories="$(OutDir)x64" Condition="'@(_SQLiteInteropX64)' != ''" />
+    <Copy SourceFiles="@(_SQLiteInteropX86)" DestinationFolder="$(OutDir)x86\" Condition="'@(_SQLiteInteropX86)' != ''" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_SQLiteInteropX64)" DestinationFolder="$(OutDir)x64\" Condition="'@(_SQLiteInteropX64)' != ''" SkipUnchangedFiles="true" />
+    <Warning Text="SQLite.Interop.dll not found under $(SQLiteStubPackageDir)x86 or x64 - the app will fail at runtime when it opens the database. Check that the Stub.System.Data.SQLite.Core.NetFramework package was restored correctly." Condition="'@(_SQLiteInteropX86)' == '' and '@(_SQLiteInteropX64)' == ''" />
+  </Target>
 </Project>
