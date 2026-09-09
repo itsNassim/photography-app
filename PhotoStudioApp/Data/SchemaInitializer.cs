@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Data.SQLite;
 using System.IO;
 
@@ -100,8 +101,73 @@ namespace PhotoStudioApp.Data
             AddColumnIfMissing("Categories", "HasFolder", "INTEGER NOT NULL DEFAULT 1");
             AddColumnIfMissing("CustomCharges", "LinkedCategoryId", "INTEGER REFERENCES Categories(Id)");
 
+            // Older databases created Categories.FolderRelativePath as NOT NULL, back when
+            // every category had a folder. SQLite can't just drop a NOT NULL constraint with
+            // ALTER TABLE, so rebuild the table if that's still the case.
+            DropNotNullIfNeeded("Categories", "FolderRelativePath");
+
             if (isNew)
                 SeedDefaults();
+        }
+
+        /// <summary>If the given column on the given table currently has a NOT NULL constraint,
+        /// rebuilds the table without it (SQLite has no direct "ALTER COLUMN" for this), copying
+        /// every existing row and every column across unchanged. Safe to call every startup -
+        /// it's a no-op once the constraint is already gone.</summary>
+        private static void DropNotNullIfNeeded(string table, string column)
+        {
+            using (var conn = Db.OpenConnection())
+            {
+                var columns = new List<(string Name, string Type, bool NotNull, string DefaultValue, bool IsPk)>();
+                using (var cmd = new SQLiteCommand($"PRAGMA table_info({table});", conn))
+                using (var r = cmd.ExecuteReader())
+                {
+                    while (r.Read())
+                    {
+                        columns.Add((
+                            Name: r.GetString(1),
+                            Type: r.GetString(2),
+                            NotNull: r.GetInt32(3) == 1,
+                            DefaultValue: r.IsDBNull(4) ? null : r.GetValue(4).ToString(),
+                            IsPk: r.GetInt32(5) > 0
+                        ));
+                    }
+                }
+
+                var targetCol = columns.Find(c => string.Equals(c.Name, column, StringComparison.OrdinalIgnoreCase));
+                if (targetCol.Name == null || !targetCol.NotNull)
+                    return; // column doesn't exist yet, or is already nullable - nothing to do
+
+                using (var tx = conn.BeginTransaction())
+                {
+                    string tempTable = table + "_migrating";
+
+                    var colDefs = new List<string>();
+                    var colNames = new List<string>();
+                    foreach (var c in columns)
+                    {
+                        colNames.Add(c.Name);
+                        string def = $"{c.Name} {c.Type}";
+                        if (c.IsPk) def += " PRIMARY KEY AUTOINCREMENT";
+                        // Drop NOT NULL specifically on the target column; keep it for every other column.
+                        else if (c.NotNull && !string.Equals(c.Name, column, StringComparison.OrdinalIgnoreCase))
+                            def += " NOT NULL";
+                        if (c.DefaultValue != null)
+                            def += $" DEFAULT {c.DefaultValue}";
+                        colDefs.Add(def);
+                    }
+
+                    Exec(conn, $"CREATE TABLE {tempTable} ({string.Join(", ", colDefs)});");
+
+                    string colList = string.Join(", ", colNames);
+                    Exec(conn, $"INSERT INTO {tempTable} ({colList}) SELECT {colList} FROM {table};");
+
+                    Exec(conn, $"DROP TABLE {table};");
+                    Exec(conn, $"ALTER TABLE {tempTable} RENAME TO {table};");
+
+                    tx.Commit();
+                }
+            }
         }
 
         private static void AddColumnIfMissing(string table, string column, string columnDefSql)
