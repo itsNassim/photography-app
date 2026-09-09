@@ -138,6 +138,13 @@ namespace PhotoStudioApp.Data
                 if (targetCol.Name == null || !targetCol.NotNull)
                     return; // column doesn't exist yet, or is already nullable - nothing to do
 
+                // Other tables (CustomCharges, CategoryPriceHistory, DailyCloseLineItems) reference
+                // this table via inline "REFERENCES" foreign keys. PRAGMA foreign_keys=OFF is a
+                // documented no-op once a transaction is open, so it MUST be issued here, before
+                // BeginTransaction - otherwise DROP TABLE below fails with "FOREIGN KEY constraint
+                // failed" even though no row data is actually violating anything.
+                Exec(conn, "PRAGMA foreign_keys=OFF;");
+
                 using (var tx = conn.BeginTransaction())
                 {
                     string tempTable = table + "_migrating";
@@ -167,6 +174,10 @@ namespace PhotoStudioApp.Data
 
                     tx.Commit();
                 }
+
+                // Re-enable for the rest of this connection's lifetime (also a no-op-safe call
+                // outside a transaction).
+                Exec(conn, "PRAGMA foreign_keys=ON;");
             }
         }
 
