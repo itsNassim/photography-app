@@ -19,7 +19,7 @@ namespace PhotoStudioApp.Services
         {
             _close = close;
             var doc = new PrintDocument();
-            doc.DocumentName = $"Daily Report - {close.CloseDate}";
+            doc.DocumentName = $"Rapport du jour - {close.CloseDate}";
             doc.PrintPage += Doc_PrintPage;
             return doc;
         }
@@ -76,11 +76,11 @@ namespace PhotoStudioApp.Services
             float x = 40;
             float lineHeight = 22;
 
-            g.DrawString("PHOTO STUDIO - DAILY REPORT", _titleFont, Brushes.Black, x, y);
+            g.DrawString("STUDIO PHOTO - RAPPORT DU JOUR", _titleFont, Brushes.Black, x, y);
             y += lineHeight + 6;
-            g.DrawString($"Date: {_close.CloseDate}", _bodyFont, Brushes.Black, x, y);
+            g.DrawString($"Date : {_close.CloseDate}", _bodyFont, Brushes.Black, x, y);
             y += lineHeight;
-            g.DrawString($"Closed at: {_close.ClosedAt:g}", _bodyFont, Brushes.Black, x, y);
+            g.DrawString($"Cloture le : {_close.ClosedAt:g}", _bodyFont, Brushes.Black, x, y);
             y += lineHeight + 10;
 
             g.DrawLine(Pens.Black, x, y, e.PageBounds.Width - x, y);
@@ -96,7 +96,7 @@ namespace PhotoStudioApp.Services
             if (_close.CustomCharges.Count > 0)
             {
                 y += 6;
-                g.DrawString("Custom charges:", _bodyFont, Brushes.Black, x, y);
+                g.DrawString("Charges additionnelles :", _bodyFont, Brushes.Black, x, y);
                 y += lineHeight;
                 foreach (var cc in _close.CustomCharges)
                 {
@@ -109,7 +109,7 @@ namespace PhotoStudioApp.Services
             y += 10;
             g.DrawLine(Pens.Black, x, y, e.PageBounds.Width - x, y);
             y += 14;
-            g.DrawString($"TOTAL: {_close.GrandTotal:0.00}", _totalFont, Brushes.Black, x, y);
+            g.DrawString($"TOTAL : {_close.GrandTotal:0.00}", _totalFont, Brushes.Black, x, y);
 
             e.HasMorePages = false;
         }

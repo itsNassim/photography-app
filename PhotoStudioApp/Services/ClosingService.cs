@@ -24,6 +24,10 @@ namespace PhotoStudioApp.Services
 
     public class ClosingService
     {
+        /// <summary>Filename prefixes purged from each category folder BEFORE counting or
+        /// moving anything, every time the day is closed (rejects/duplicates from the lab).</summary>
+        private static readonly string[] PurgedPrefixes = { "re", "GSW" };
+
         private readonly FolderCountService _folders = new FolderCountService();
         private readonly CategoryRepository _categoryRepo = new CategoryRepository();
         private readonly CustomChargeRepository _chargeRepo = new CustomChargeRepository();
@@ -40,18 +44,21 @@ namespace PhotoStudioApp.Services
             var settings = _settingsRepo.LoadAll();
 
             if (string.IsNullOrWhiteSpace(settings.StudioRootPath))
-                throw new CloseDayException("The studio folder path is not set. Configure it in Settings first.");
+                throw new CloseDayException("Le dossier du studio n'est pas configure. Configurez-le dans Parametres.");
             if (string.IsNullOrWhiteSpace(settings.ArchiveRootPath))
-                throw new CloseDayException("The archive folder path is not set. Configure it in Settings first.");
+                throw new CloseDayException("Le dossier d'archive n'est pas configure. Configurez-le dans Parametres.");
             if (!_folders.IsPathReachable(settings.ArchiveRootPath))
-                throw new CloseDayException($"The archive destination is unreachable:\n{settings.ArchiveRootPath}\n\nCheck the drive/network path and try again.");
+                throw new CloseDayException($"Le dossier d'archive est inaccessible :\n{settings.ArchiveRootPath}\n\nVerifiez le chemin (disque/reseau) puis reessayez.");
 
-            var categories = _categoryRepo.GetActiveCategories();
-            if (categories.Count == 0)
-                throw new CloseDayException("There are no active categories configured.");
+            // Only folder-backed categories are counted/moved from disk. No-folder (fixed-price
+            // "service") categories never appear here - their revenue is captured entirely
+            // through the custom charges created against them during the day.
+            var categories = _categoryRepo.GetActiveFolderCategories();
 
-            string todayFolderAbs = Path.Combine(settings.StudioRootPath, settings.TodayFolderName);
-            _folders.EnsureFolderExists(todayFolderAbs);
+            DateTime closeDateValue = DateTime.ParseExact(settings.CurrentWorkDate, "yyyy-MM-dd", null);
+            string workingFolderName = closeDateValue.ToString(settings.DateFolderFormat, AppCulture.French);
+            string workingFolderAbs = Path.Combine(settings.StudioRootPath, workingFolderName);
+            _folders.EnsureFolderExists(workingFolderAbs);
 
             var close = new DailyClose
             {
@@ -61,8 +68,8 @@ namespace PhotoStudioApp.Services
 
             int totalPhotosFound = 0;
 
-            // 1) Count each category folder BEFORE moving anything, and record a line item
-            //    per category (even zero-count categories, so the report is complete).
+            // 1) For each category folder: purge rejected files FIRST (before any copy/count),
+            //    then count what's left, then remember it for the move step below.
             foreach (var cat in categories)
             {
                 string catAbs = Path.Combine(settings.StudioRootPath, cat.FolderRelativePath);
@@ -78,6 +85,8 @@ namespace PhotoStudioApp.Services
                     });
                     continue;
                 }
+
+                _folders.DeleteFilesWithPrefixes(catAbs, PurgedPrefixes);
 
                 int count = _folders.CountPhotos(catAbs);
                 totalPhotosFound += count;
@@ -99,26 +108,31 @@ namespace PhotoStudioApp.Services
             if (totalPhotosFound == 0 && close.CustomCharges.Count == 0 && !confirmedEmptyDay)
             {
                 throw new EmptyDayException(
-                    "No photos were found in any category folder, and there are no custom charges today. " +
-                    "Close the day anyway?");
+                    "Aucune photo trouvee dans les dossiers de categories, et aucune charge additionnelle aujourd'hui. " +
+                    "Cloturer quand meme la journee ?");
             }
 
-            // 2) Move each category's photos into the "today" folder first.
+            // 2) NOW move each category's (already-purged) photos into the working folder.
             foreach (var cat in categories)
             {
                 string catAbs = Path.Combine(settings.StudioRootPath, cat.FolderRelativePath);
                 if (Directory.Exists(catAbs))
-                    _folders.MovePhotos(catAbs, todayFolderAbs);
+                    _folders.MovePhotos(catAbs, workingFolderAbs);
             }
 
-            // 3) Move "today" into the archive, named with the actual close date.
-            DateTime closeDateValue = DateTime.ParseExact(settings.CurrentWorkDate, "yyyy-MM-dd", null);
-            string archiveFolderName = closeDateValue.ToString(settings.DateFolderFormat);
-            string archiveDest = Path.Combine(settings.ArchiveRootPath, archiveFolderName);
+            // 3) Move the working folder into archiveRoot\YYYY\<mois en francais>\<dossier du jour>.
+            //    Directory.CreateDirectory only creates whatever's missing and does nothing for
+            //    levels that already exist, so "check year, then check month" happens for free.
+            string yearFolderName = closeDateValue.Year.ToString();
+            string monthFolderName = closeDateValue.ToString("MMMM", AppCulture.French);
+            string archiveYearMonthDir = Path.Combine(settings.ArchiveRootPath, yearFolderName, monthFolderName);
+            Directory.CreateDirectory(archiveYearMonthDir);
+
+            string archiveDest = Path.Combine(archiveYearMonthDir, workingFolderName);
 
             try
             {
-                _folders.MoveDirectory(todayFolderAbs, archiveDest);
+                _folders.MoveDirectory(workingFolderAbs, archiveDest);
             }
             catch (IOException ex)
             {
@@ -126,10 +140,9 @@ namespace PhotoStudioApp.Services
             }
             close.ArchiveFolderPath = archiveDest;
 
-            // 4) Create tomorrow's working folder (same naming convention, skip-weekday rule).
-            var closedWeekdays = WorkdayCalculator.ParseClosedWeekdays(settings.ClosedWeekdaysCsv);
-            DateTime nextWorkDate = WorkdayCalculator.NextWorkDate(closeDateValue, closedWeekdays);
-            _folders.EnsureFolderExists(Path.Combine(settings.StudioRootPath, settings.TodayFolderName));
+            // 4) Re-create the (now empty) category folders ready for the next working day.
+            //    The next working folder itself is created on demand the next time CloseDay()
+            //    runs (named from whatever CurrentWorkDate is then) - nothing to pre-create here.
             foreach (var cat in categories)
                 _folders.EnsureFolderExists(Path.Combine(settings.StudioRootPath, cat.FolderRelativePath));
 
@@ -150,7 +163,9 @@ namespace PhotoStudioApp.Services
                 }
             }
 
-            // 6) Advance the logical work date.
+            // 6) Advance the logical work date (skipping configured closed weekdays).
+            var closedWeekdays = WorkdayCalculator.ParseClosedWeekdays(settings.ClosedWeekdaysCsv);
+            DateTime nextWorkDate = WorkdayCalculator.NextWorkDate(closeDateValue, closedWeekdays);
             settings.CurrentWorkDate = nextWorkDate.ToString("yyyy-MM-dd");
             _settingsRepo.SaveAll(settings);
 

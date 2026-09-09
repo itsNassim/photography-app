@@ -35,8 +35,7 @@ namespace PhotoStudioApp.Data
             {
                 StudioRootPath = Get("StudioRootPath"),
                 ArchiveRootPath = Get("ArchiveRootPath"),
-                TodayFolderName = Get("TodayFolderName", "today"),
-                DateFolderFormat = Get("DateFolderFormat", "dd-MMMM"),
+                DateFolderFormat = Get("DateFolderFormat", "dd MMMM"),
                 PasswordHash = Get("PasswordHash"),
                 PasswordSalt = Get("PasswordSalt"),
                 ClosedWeekdaysCsv = Get("ClosedWeekdaysCsv", "Friday"),
@@ -49,7 +48,6 @@ namespace PhotoStudioApp.Data
         {
             Set("StudioRootPath", s.StudioRootPath);
             Set("ArchiveRootPath", s.ArchiveRootPath);
-            Set("TodayFolderName", s.TodayFolderName);
             Set("DateFolderFormat", s.DateFolderFormat);
             Set("PasswordHash", s.PasswordHash);
             Set("PasswordSalt", s.PasswordSalt);

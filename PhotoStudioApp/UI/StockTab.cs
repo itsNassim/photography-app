@@ -30,35 +30,35 @@ namespace PhotoStudioApp.UI
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-            var title = new Label { Text = "Stock / Consumables", Font = Theme.FontHeading, AutoSize = true, Margin = new Padding(0, 0, 0, 10) };
+            var title = new Label { Text = "Stock / Consommables", Font = Theme.FontHeading, AutoSize = true, Margin = new Padding(0, 0, 0, 10) };
             root.Controls.Add(title, 0, 0);
 
             var toolbar = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 8) };
             _searchBox = new TextBox { Width = 220, Font = Theme.FontBase, Margin = new Padding(0, 4, 10, 4) };
             _searchBox.TextChanged += (s, e) => ApplyFilter();
-            var searchLabel = new Label { Text = "Search:", AutoSize = true, Margin = new Padding(0, 9, 4, 0) };
+            var searchLabel = new Label { Text = "Rechercher :", AutoSize = true, Margin = new Padding(0, 9, 4, 0) };
 
-            _filterCombo = new ComboBox { Width = 160, DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(0, 4, 14, 4) };
-            _filterCombo.Items.AddRange(new object[] { "All", "Low stock", "Out of stock" });
+            _filterCombo = new ComboBox { Width = 170, DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(0, 4, 14, 4) };
+            _filterCombo.Items.AddRange(new object[] { "Tous", "Stock bas", "Rupture de stock" });
             _filterCombo.SelectedIndex = 0;
             _filterCombo.SelectedIndexChanged += (s, e) => ApplyFilter();
 
-            var addBtn = Theme.MakePrimaryButton("+ Add item");
-            addBtn.Width = 130;
+            var addBtn = Theme.MakePrimaryButton("+ Ajouter");
+            addBtn.Width = 120;
             addBtn.Click += AddBtn_Click;
-            var editBtn = Theme.MakeSecondaryButton("Edit");
-            editBtn.Width = 90;
+            var editBtn = Theme.MakeSecondaryButton("Modifier");
+            editBtn.Width = 100;
             editBtn.Click += EditBtn_Click;
-            var restockBtn = Theme.MakeSecondaryButton("Adjust qty");
+            var restockBtn = Theme.MakeSecondaryButton("Ajuster qte");
             restockBtn.Width = 110;
             restockBtn.Click += RestockBtn_Click;
-            var deleteBtn = Theme.MakeDangerButton("Delete");
-            deleteBtn.Width = 90;
+            var deleteBtn = Theme.MakeDangerButton("Supprimer");
+            deleteBtn.Width = 100;
             deleteBtn.Click += DeleteBtn_Click;
 
             toolbar.Controls.Add(searchLabel);
             toolbar.Controls.Add(_searchBox);
-            toolbar.Controls.Add(new Label { Text = "Filter:", AutoSize = true, Margin = new Padding(0, 9, 4, 0) });
+            toolbar.Controls.Add(new Label { Text = "Filtre :", AutoSize = true, Margin = new Padding(0, 9, 4, 0) });
             toolbar.Controls.Add(_filterCombo);
             toolbar.Controls.Add(addBtn);
             toolbar.Controls.Add(editBtn);
@@ -69,11 +69,11 @@ namespace PhotoStudioApp.UI
             var gridPanel = new Panel { Dock = DockStyle.Fill, BackColor = Theme.CardBackground };
             _grid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true };
             Theme.StyleGrid(_grid);
-            _grid.Columns.Add("Name", "Name");
-            _grid.Columns.Add("Category", "Category");
-            _grid.Columns.Add("Quantity", "Quantity");
-            _grid.Columns.Add("UnitPrice", "Unit Price");
-            _grid.Columns.Add("Status", "Status");
+            _grid.Columns.Add("Name", "Nom");
+            _grid.Columns.Add("Category", "Categorie");
+            _grid.Columns.Add("Quantity", "Quantite");
+            _grid.Columns.Add("UnitPrice", "Prix unitaire");
+            _grid.Columns.Add("Status", "Statut");
             _grid.RowPrePaint += Grid_RowPrePaint;
             gridPanel.Controls.Add(_grid);
             root.Controls.Add(gridPanel, 0, 2);
@@ -110,16 +110,16 @@ namespace PhotoStudioApp.UI
         {
             var all = _repo.GetAll(activeOnly: true);
             string search = _searchBox.Text?.Trim().ToLowerInvariant() ?? "";
-            string filter = _filterCombo.SelectedItem?.ToString() ?? "All";
+            string filter = _filterCombo.SelectedItem?.ToString() ?? "Tous";
 
             var filtered = all.Where(i => string.IsNullOrEmpty(search) || i.Name.ToLowerInvariant().Contains(search));
-            if (filter == "Low stock") filtered = filtered.Where(i => i.IsLowStock);
-            else if (filter == "Out of stock") filtered = filtered.Where(i => i.IsOutOfStock);
+            if (filter == "Stock bas") filtered = filtered.Where(i => i.IsLowStock);
+            else if (filter == "Rupture de stock") filtered = filtered.Where(i => i.IsOutOfStock);
 
             _grid.Rows.Clear();
             foreach (var item in filtered)
             {
-                string status = item.IsOutOfStock ? "OUT OF STOCK" : item.IsLowStock ? "Low stock" : "OK";
+                string status = item.IsOutOfStock ? "RUPTURE" : item.IsLowStock ? "Stock bas" : "OK";
                 int idx = _grid.Rows.Add(item.Name, item.Category, item.Quantity, item.UnitPrice.ToString("0.00"), status);
                 _grid.Rows[idx].Tag = item;
             }
@@ -129,6 +129,8 @@ namespace PhotoStudioApp.UI
 
         private void AddBtn_Click(object sender, EventArgs e)
         {
+            if (!AuthGate.RequireAdminPassword(this)) return;
+
             using (var dlg = new AddEditStockDialog())
             {
                 if (dlg.ShowDialog() == DialogResult.OK)
@@ -144,6 +146,8 @@ namespace PhotoStudioApp.UI
         {
             var item = SelectedItem();
             if (item == null) return;
+            if (!AuthGate.RequireAdminPassword(this)) return;
+
             using (var dlg = new AddEditStockDialog(item))
             {
                 if (dlg.ShowDialog() == DialogResult.OK)
@@ -161,11 +165,12 @@ namespace PhotoStudioApp.UI
         {
             var item = SelectedItem();
             if (item == null) return;
+            if (!AuthGate.RequireAdminPassword(this)) return;
 
             using (var form = new Form
             {
-                Text = $"Adjust quantity - {item.Name}",
-                Width = 360,
+                Text = $"Ajuster la quantite - {item.Name}",
+                Width = 380,
                 Height = 160,
                 FormBorderStyle = FormBorderStyle.FixedDialog,
                 StartPosition = FormStartPosition.CenterParent,
@@ -174,10 +179,10 @@ namespace PhotoStudioApp.UI
                 Font = Theme.FontBase
             })
             {
-                var label = new Label { Text = $"Current quantity: {item.Quantity}\nEnter change (+ to restock, - to remove):", AutoSize = true, Left = 16, Top = 14 };
+                var label = new Label { Text = $"Quantite actuelle : {item.Quantity}\nSaisissez la variation (+ pour reapprovisionner, - pour retirer) :", AutoSize = true, Left = 16, Top = 14 };
                 var input = new NumericUpDown { Minimum = -100000, Maximum = 100000, Left = 16, Top = 60, Width = 120 };
-                var okBtn = Theme.MakePrimaryButton("Apply");
-                okBtn.Left = 160; okBtn.Top = 58; okBtn.Width = 100;
+                var okBtn = Theme.MakePrimaryButton("Appliquer");
+                okBtn.Left = 160; okBtn.Top = 58; okBtn.Width = 110;
                 okBtn.Click += (s, e2) => { form.Tag = (int)input.Value; form.DialogResult = DialogResult.OK; };
                 form.Controls.Add(label);
                 form.Controls.Add(input);
@@ -197,9 +202,10 @@ namespace PhotoStudioApp.UI
         {
             var item = SelectedItem();
             if (item == null) return;
+            if (!AuthGate.RequireAdminPassword(this)) return;
 
-            if (MessageBox.Show($"Delete stock item '{item.Name}'? Existing history that referenced it is unaffected.",
-                "Confirm delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
+            if (MessageBox.Show($"Supprimer l'article de stock '{item.Name}' ? L'historique existant qui le mentionne n'est pas affecte.",
+                "Confirmer la suppression", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
             {
                 _repo.Deactivate(item.Id);
                 RefreshAll();

@@ -13,7 +13,7 @@ namespace PhotoStudioApp.Data
             var list = new List<Category>();
             using (var conn = Db.OpenConnection())
             using (var cmd = new SQLiteCommand(@"
-                SELECT c.Id, c.Name, c.FolderRelativePath, c.IsCustom,
+                SELECT c.Id, c.Name, c.HasFolder, c.FolderRelativePath, c.IsCustom,
                        (SELECT Price FROM CategoryPriceHistory ph
                          WHERE ph.CategoryId = c.Id AND ph.EffectiveFrom <= datetime('now')
                          ORDER BY ph.EffectiveFrom DESC LIMIT 1) AS CurrentPrice
@@ -28,13 +28,33 @@ namespace PhotoStudioApp.Data
                     {
                         Id = r.GetInt32(0),
                         Name = r.GetString(1),
-                        FolderRelativePath = r.GetString(2),
-                        IsCustom = r.GetInt64(3) == 1,
+                        HasFolder = r.GetInt64(2) == 1,
+                        FolderRelativePath = r.IsDBNull(3) ? null : r.GetString(3),
+                        IsCustom = r.GetInt64(4) == 1,
                         IsActive = true,
-                        CurrentPrice = r.IsDBNull(4) ? 0m : Convert.ToDecimal(r.GetDouble(4))
+                        CurrentPrice = r.IsDBNull(5) ? 0m : Convert.ToDecimal(r.GetDouble(5))
                     });
                 }
             }
+            return list;
+        }
+
+        /// <summary>Active, folder-backed categories only - what the Home dashboard counts from disk.</summary>
+        public List<Category> GetActiveFolderCategories()
+        {
+            var list = new List<Category>();
+            foreach (var c in GetActiveCategories())
+                if (c.HasFolder) list.Add(c);
+            return list;
+        }
+
+        /// <summary>Active, no-folder fixed-price "service" categories only - what the
+        /// "add extra charge" screen offers alongside stock items.</summary>
+        public List<Category> GetActiveServiceCategories()
+        {
+            var list = new List<Category>();
+            foreach (var c in GetActiveCategories())
+                if (!c.HasFolder) list.Add(c);
             return list;
         }
 
@@ -43,7 +63,7 @@ namespace PhotoStudioApp.Data
             var list = new List<Category>();
             using (var conn = Db.OpenConnection())
             using (var cmd = new SQLiteCommand(@"
-                SELECT c.Id, c.Name, c.FolderRelativePath, c.IsCustom, c.IsActive,
+                SELECT c.Id, c.Name, c.HasFolder, c.FolderRelativePath, c.IsCustom, c.IsActive,
                        (SELECT Price FROM CategoryPriceHistory ph
                          WHERE ph.CategoryId = c.Id AND ph.EffectiveFrom <= datetime('now')
                          ORDER BY ph.EffectiveFrom DESC LIMIT 1) AS CurrentPrice
@@ -58,29 +78,38 @@ namespace PhotoStudioApp.Data
                     {
                         Id = r.GetInt32(0),
                         Name = r.GetString(1),
-                        FolderRelativePath = r.GetString(2),
-                        IsCustom = r.GetInt64(3) == 1,
-                        IsActive = r.GetInt64(4) == 1,
-                        CurrentPrice = r.IsDBNull(5) ? 0m : Convert.ToDecimal(r.GetDouble(5))
+                        HasFolder = r.GetInt64(2) == 1,
+                        FolderRelativePath = r.IsDBNull(3) ? null : r.GetString(3),
+                        IsCustom = r.GetInt64(4) == 1,
+                        IsActive = r.GetInt64(5) == 1,
+                        CurrentPrice = r.IsDBNull(6) ? 0m : Convert.ToDecimal(r.GetDouble(6))
                     });
                 }
             }
             return list;
         }
 
-        public int AddCategory(string name, string folderRelativePath, bool isCustom, decimal initialPrice)
+        public Category GetById(int id)
+        {
+            foreach (var c in GetAllCategories(includeInactive: true))
+                if (c.Id == id) return c;
+            return null;
+        }
+
+        public int AddCategory(string name, bool hasFolder, string folderRelativePath, bool isCustom, decimal initialPrice)
         {
             using (var conn = Db.OpenConnection())
             using (var tx = conn.BeginTransaction())
             {
                 int categoryId;
                 using (var cmd = new SQLiteCommand(@"
-                    INSERT INTO Categories (Name, FolderRelativePath, IsCustom, IsActive)
-                    VALUES (@name, @path, @custom, 1);
+                    INSERT INTO Categories (Name, HasFolder, FolderRelativePath, IsCustom, IsActive)
+                    VALUES (@name, @hasFolder, @path, @custom, 1);
                     SELECT last_insert_rowid();", conn))
                 {
                     cmd.Parameters.AddWithValue("@name", name);
-                    cmd.Parameters.AddWithValue("@path", folderRelativePath);
+                    cmd.Parameters.AddWithValue("@hasFolder", hasFolder ? 1 : 0);
+                    cmd.Parameters.AddWithValue("@path", (object)folderRelativePath ?? DBNull.Value);
                     cmd.Parameters.AddWithValue("@custom", isCustom ? 1 : 0);
                     categoryId = Convert.ToInt32((long)cmd.ExecuteScalar());
                 }
@@ -124,12 +153,13 @@ namespace PhotoStudioApp.Data
             }
         }
 
-        public void UpdateFolderPath(int categoryId, string newRelativePath)
+        public void UpdateFolderPath(int categoryId, bool hasFolder, string newRelativePath)
         {
             using (var conn = Db.OpenConnection())
-            using (var cmd = new SQLiteCommand("UPDATE Categories SET FolderRelativePath=@p WHERE Id=@id;", conn))
+            using (var cmd = new SQLiteCommand("UPDATE Categories SET HasFolder=@h, FolderRelativePath=@p WHERE Id=@id;", conn))
             {
-                cmd.Parameters.AddWithValue("@p", newRelativePath);
+                cmd.Parameters.AddWithValue("@h", hasFolder ? 1 : 0);
+                cmd.Parameters.AddWithValue("@p", (object)newRelativePath ?? DBNull.Value);
                 cmd.Parameters.AddWithValue("@id", categoryId);
                 cmd.ExecuteNonQuery();
             }

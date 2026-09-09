@@ -14,7 +14,7 @@ namespace PhotoStudioApp.UI
 
         public MainForm()
         {
-            Text = "Photo Studio - Daily Production & Revenue";
+            Text = "Studio Photo - Production et revenus du jour";
             Width = 1180;
             Height = 760;
             StartPosition = FormStartPosition.CenterScreen;
@@ -41,11 +41,11 @@ namespace PhotoStudioApp.UI
                 Padding = new Point(18, 8)
             };
 
-            var homeTabPage = new TabPage("Home / Today") { BackColor = Theme.Background };
+            var homeTabPage = new TabPage("Accueil") { BackColor = Theme.Background };
             var stockTabPage = new TabPage("Stock") { BackColor = Theme.Background };
-            var categoriesTabPage = new TabPage("Categories / Price List") { BackColor = Theme.Background };
-            var historyTabPage = new TabPage("History") { BackColor = Theme.Background };
-            var settingsTabPage = new TabPage("Settings") { BackColor = Theme.Background };
+            var categoriesTabPage = new TabPage("Categories / Tarifs") { BackColor = Theme.Background };
+            var historyTabPage = new TabPage("Historique") { BackColor = Theme.Background };
+            var settingsTabPage = new TabPage("Parametres") { BackColor = Theme.Background };
 
             _homeTab = new HomeTab { Dock = DockStyle.Fill };
             _stockTab = new StockTab { Dock = DockStyle.Fill };

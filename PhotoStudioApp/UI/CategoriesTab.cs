@@ -28,17 +28,17 @@ namespace PhotoStudioApp.UI
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-            var title = new Label { Text = "Categories / Price List", Font = Theme.FontHeading, AutoSize = true, Margin = new Padding(0, 0, 0, 10) };
+            var title = new Label { Text = "Categories / Tarifs", Font = Theme.FontHeading, AutoSize = true, Margin = new Padding(0, 0, 0, 10) };
             root.Controls.Add(title, 0, 0);
 
             var toolbar = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 8) };
-            var addBtn = Theme.MakePrimaryButton("+ Add category");
-            addBtn.Width = 150;
+            var addBtn = Theme.MakePrimaryButton("+ Ajouter");
+            addBtn.Width = 120;
             addBtn.Click += AddBtn_Click;
-            var editBtn = Theme.MakeSecondaryButton("Edit price / name");
-            editBtn.Width = 150;
+            var editBtn = Theme.MakeSecondaryButton("Modifier");
+            editBtn.Width = 110;
             editBtn.Click += EditBtn_Click;
-            var toggleBtn = Theme.MakeSecondaryButton("Activate / Deactivate");
+            var toggleBtn = Theme.MakeSecondaryButton("Activer / Desactiver");
             toggleBtn.Width = 170;
             toggleBtn.Click += ToggleBtn_Click;
             toolbar.Controls.Add(addBtn);
@@ -49,11 +49,11 @@ namespace PhotoStudioApp.UI
             var gridPanel = new Panel { Dock = DockStyle.Fill, BackColor = Theme.CardBackground };
             _grid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true };
             Theme.StyleGrid(_grid);
-            _grid.Columns.Add("Name", "Category name");
-            _grid.Columns.Add("Folder", "Folder (relative to studio root)");
+            _grid.Columns.Add("Name", "Nom de la categorie");
+            _grid.Columns.Add("Folder", "Dossier (ou sans dossier)");
             _grid.Columns.Add("Type", "Type");
-            _grid.Columns.Add("Price", "Current price");
-            _grid.Columns.Add("Status", "Status");
+            _grid.Columns.Add("Price", "Prix actuel");
+            _grid.Columns.Add("Status", "Statut");
             gridPanel.Controls.Add(_grid);
             root.Controls.Add(gridPanel, 0, 2);
 
@@ -66,9 +66,10 @@ namespace PhotoStudioApp.UI
             _grid.Rows.Clear();
             foreach (var cat in all)
             {
+                string folderDisplay = cat.HasFolder ? cat.FolderRelativePath : "(sans dossier - prix fixe)";
                 int idx = _grid.Rows.Add(
-                    cat.Name, cat.FolderRelativePath, cat.IsCustom ? "Custom" : "Fixed",
-                    cat.CurrentPrice.ToString("0.00"), cat.IsActive ? "Active" : "Deactivated");
+                    cat.Name, folderDisplay, cat.IsCustom ? "Personnalisee" : "Fixe",
+                    cat.CurrentPrice.ToString("0.00"), cat.IsActive ? "Active" : "Desactivee");
                 _grid.Rows[idx].Tag = cat;
                 if (!cat.IsActive)
                 {
@@ -81,11 +82,13 @@ namespace PhotoStudioApp.UI
 
         private void AddBtn_Click(object sender, EventArgs e)
         {
+            if (!AuthGate.RequireAdminPassword(this)) return;
+
             using (var dlg = new AddEditCategoryDialog())
             {
                 if (dlg.ShowDialog() == DialogResult.OK)
                 {
-                    _repo.AddCategory(dlg.CategoryName, dlg.FolderRelativePath, isCustom: true, initialPrice: dlg.Price);
+                    _repo.AddCategory(dlg.CategoryName, dlg.HasFolder, dlg.FolderRelativePath, isCustom: true, initialPrice: dlg.Price);
                     RefreshAll();
                     CategoriesChanged?.Invoke(this, EventArgs.Empty);
                 }
@@ -96,6 +99,7 @@ namespace PhotoStudioApp.UI
         {
             var cat = Selected();
             if (cat == null) return;
+            if (!AuthGate.RequireAdminPassword(this)) return;
 
             using (var dlg = new AddEditCategoryDialog(cat))
             {
@@ -103,10 +107,10 @@ namespace PhotoStudioApp.UI
                 {
                     if (dlg.CategoryName != cat.Name)
                         _repo.RenameCategory(cat.Id, dlg.CategoryName);
-                    if (dlg.FolderRelativePath != cat.FolderRelativePath)
-                        _repo.UpdateFolderPath(cat.Id, dlg.FolderRelativePath);
+                    if (dlg.HasFolder != cat.HasFolder || dlg.FolderRelativePath != cat.FolderRelativePath)
+                        _repo.UpdateFolderPath(cat.Id, dlg.HasFolder, dlg.FolderRelativePath);
                     if (dlg.Price != cat.CurrentPrice)
-                        _repo.SetPrice(cat.Id, dlg.Price); // new effective-dated row; history keeps old price
+                        _repo.SetPrice(cat.Id, dlg.Price); // nouvelle ligne datee ; l'historique garde l'ancien prix
 
                     RefreshAll();
                     CategoriesChanged?.Invoke(this, EventArgs.Empty);
@@ -118,11 +122,12 @@ namespace PhotoStudioApp.UI
         {
             var cat = Selected();
             if (cat == null) return;
+            if (!AuthGate.RequireAdminPassword(this)) return;
 
             if (cat.IsActive)
             {
-                if (MessageBox.Show($"Deactivate '{cat.Name}'? It will disappear from Home but past reports referencing it stay intact.",
-                    "Confirm deactivate", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                if (MessageBox.Show($"Desactiver '{cat.Name}' ? Elle disparaitra de l'accueil mais les rapports passes qui la mentionnent restent intacts.",
+                    "Confirmer la desactivation", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
                     return;
                 _repo.Deactivate(cat.Id);
             }

@@ -14,7 +14,7 @@ namespace PhotoStudioApp.UI.Dialogs
         public BreakdownReportForm(DailyClose close)
         {
             _close = close;
-            Text = $"Daily report - {close.CloseDate}";
+            Text = $"Rapport du jour - {close.CloseDate}";
             Width = 560;
             Height = 620;
             FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -34,7 +34,7 @@ namespace PhotoStudioApp.UI.Dialogs
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-            var title = new Label { Text = $"Daily report - {_close.CloseDate}", Font = Theme.FontHeading, AutoSize = true, Margin = new Padding(0, 0, 0, 10) };
+            var title = new Label { Text = $"Rapport du jour - {_close.CloseDate}", Font = Theme.FontHeading, AutoSize = true, Margin = new Padding(0, 0, 0, 10) };
             root.Controls.Add(title, 0, 0);
 
             var textBox = new TextBox
@@ -49,14 +49,14 @@ namespace PhotoStudioApp.UI.Dialogs
             root.Controls.Add(textBox, 0, 1);
 
             var btnPanel = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, Dock = DockStyle.Fill, AutoSize = true, Margin = new Padding(0, 12, 0, 0) };
-            var closeBtn = Theme.MakeSecondaryButton("Close");
+            var closeBtn = Theme.MakeSecondaryButton("Fermer");
             closeBtn.Width = 100;
             closeBtn.Click += (s, e) => Close();
-            var exportPdfBtn = Theme.MakeSecondaryButton("Export as PDF");
-            exportPdfBtn.Width = 140;
+            var exportPdfBtn = Theme.MakeSecondaryButton("Exporter en PDF");
+            exportPdfBtn.Width = 150;
             exportPdfBtn.Click += ExportPdfBtn_Click;
-            var printBtn = Theme.MakePrimaryButton("🖨 Print");
-            printBtn.Width = 120;
+            var printBtn = Theme.MakePrimaryButton("🖨 Imprimer");
+            printBtn.Width = 130;
             printBtn.Click += PrintBtn_Click;
 
             btnPanel.Controls.Add(closeBtn);
@@ -70,9 +70,9 @@ namespace PhotoStudioApp.UI.Dialogs
         private string BuildReportText()
         {
             var sb = new StringBuilder();
-            sb.AppendLine("PHOTO STUDIO - DAILY REPORT");
-            sb.AppendLine($"Date: {_close.CloseDate}");
-            sb.AppendLine($"Closed at: {_close.ClosedAt:g}");
+            sb.AppendLine("STUDIO PHOTO - RAPPORT DU JOUR");
+            sb.AppendLine($"Date : {_close.CloseDate}");
+            sb.AppendLine($"Cloture le : {_close.ClosedAt:g}");
             sb.AppendLine(new string('-', 46));
 
             foreach (var li in _close.LineItems)
@@ -81,13 +81,13 @@ namespace PhotoStudioApp.UI.Dialogs
             if (_close.CustomCharges.Count > 0)
             {
                 sb.AppendLine();
-                sb.AppendLine("Custom charges:");
+                sb.AppendLine("Charges additionnelles :");
                 foreach (var cc in _close.CustomCharges)
                     sb.AppendLine($"  {cc.Description,-30} = {cc.Amount,10:0.00}");
             }
 
             sb.AppendLine(new string('-', 46));
-            sb.AppendLine($"TOTAL: {_close.GrandTotal:0.00}");
+            sb.AppendLine($"TOTAL : {_close.GrandTotal:0.00}");
             return sb.ToString();
         }
 
@@ -99,7 +99,7 @@ namespace PhotoStudioApp.UI.Dialogs
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Could not print:\n" + ex.Message, "Print error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Impossible d'imprimer :\n" + ex.Message, "Erreur d'impression", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -107,8 +107,8 @@ namespace PhotoStudioApp.UI.Dialogs
         {
             using (var dlg = new SaveFileDialog
             {
-                Filter = "PDF file (*.pdf)|*.pdf",
-                FileName = $"DailyReport_{_close.CloseDate}.pdf"
+                Filter = "Fichier PDF (*.pdf)|*.pdf",
+                FileName = $"RapportDuJour_{_close.CloseDate}.pdf"
             })
             {
                 if (dlg.ShowDialog() != DialogResult.OK) return;
@@ -116,11 +116,11 @@ namespace PhotoStudioApp.UI.Dialogs
                 try
                 {
                     _printService.ExportToPdf(_close, dlg.FileName);
-                    MessageBox.Show("PDF exported successfully.", "Done", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show("PDF exporte avec succes.", "Termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show(ex.Message, "PDF export unavailable", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show(ex.Message, "Export PDF indisponible", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
             }
         }

@@ -68,8 +68,8 @@ namespace PhotoStudioApp
             catch (Exception ex)
             {
                 MessageBox.Show(
-                    "Could not create or open the local database:\n" + ex.Message,
-                    "Startup error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    "Impossible de creer ou d'ouvrir la base de donnees locale :\n" + ex.Message,
+                    "Erreur au demarrage", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
@@ -80,8 +80,8 @@ namespace PhotoStudioApp
         {
             if (ex == null) return;
             MessageBox.Show(
-                "An unexpected error occurred:\n\n" + ex.Message,
-                "Photo Studio App - Error",
+                "Une erreur inattendue est survenue :\n\n" + ex.Message,
+                "Studio Photo App - Erreur",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }

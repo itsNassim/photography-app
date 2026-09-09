@@ -131,6 +131,13 @@ folders manually.
 administrator to approve the UAC prompt once, same as any other Windows
 installer. The app itself does not need to run as administrator afterwards.
 
+## Interface language
+
+The app's UI is entirely in **French** (menus, buttons, messages, and the
+printed/PDF report). This README stays in English for the dev-facing parts
+(build steps, architecture), but screenshots/labels in the running app will
+read "Accueil", "Cloturer la journee", etc.
+
 ## First run / configuration
 
 On first launch the app creates its SQLite database in
@@ -138,54 +145,77 @@ On first launch the app creates its SQLite database in
 spec (`8 identite`, `4 identite`, `4 visa`, `8 visa`, and the two `amature`
 sub-categories), each starting at price 0.
 
-Go to the **Settings** tab and configure, in order:
+Go to **Parametres** (Settings) and configure, in order:
 
-1. **Studio root folder** - where the category subfolders and the working
-   "today" folder live day-to-day (e.g. `D:\PhotoStudio\studio`). The app will
-   create this folder and the category subfolders for you.
-2. **Archive/destination folder** - where each closed day's photos get moved to,
-   one dated subfolder per day (e.g. `D:\PhotoStudio\archive\07-September`).
-3. **Date folder format** - controls how the archived-day folder (and, if you
-   choose a format containing the year, disambiguates across years) is named.
-   Examples: `dd-MMMM` → `07-September`, `yyyy-MM-dd` → `2026-09-07`.
-4. **Closed weekdays** - which day(s) the studio is closed. When Close Day
-   computes "tomorrow," it skips forward over any checked day(s). Friday is
-   checked by default per the spec, but you can change this at any time.
-5. **Closing password** - click "Set / Change password" and set the password
-   staff will need to close each day. It's stored as a salted PBKDF2 hash, never
-   in plain text.
+1. **Dossier racine du studio** (studio root folder) - where the category
+   subfolders live day-to-day (e.g. `D:\PhotoStudio\studio`). The app creates
+   this folder and the category subfolders for you.
+2. **Dossier d'archive** (archive folder) - the *parent* folder that will
+   contain one subfolder per year (e.g. `D:\PhotoStudio\archive`). The app
+   automatically builds `archive\2026\septembre\07 septembre\...` underneath
+   it at close time - you never create the year/month folders yourself.
+3. **Format du nom de dossier** - controls how the daily working folder and
+   the day-level archive folder are named. Default `dd MMMM` → `07 septembre`
+   (in French, regardless of the machine's Windows display language).
+4. **Jours de fermeture** (closed weekdays) - which day(s) the studio is
+   closed. When closing the day and computing "the next work day," the app
+   skips forward over any checked day(s). Vendredi (Friday) is checked by
+   default, but you can change this at any time.
+5. **Mot de passe administrateur** - click "Definir / Changer" and set the
+   password. This single password protects: closing the day, all Stock and
+   Categories add/edit/delete actions, and opening the History tab. It's
+   stored as a salted PBKDF2 hash, never in plain text.
 
-Then go to **Categories / Price List** and set a real price for each of the 6
-fixed categories (they start at 0), and add any custom categories you need -
-each custom category needs a name, a price, and a folder path *relative to the
-studio root* (e.g. `10x15` or `amature\20 identite` for a nested folder).
+Then go to **Categories / Tarifs** and set a real price for each of the 6
+fixed categories (they start at 0), and add any custom categories you need.
+Each category is either:
+- **Folder-backed** - pick its folder with the "Parcourir..." button (it must
+  be inside the studio root; the app computes the relative path for you), or
+- **Sans dossier / prix fixe** (no folder, fixed price) - tick the checkbox
+  instead. Use this for services with no folder to count, e.g. printing
+  photos straight from a customer's phone: no dossier to watch, just a fixed
+  price per print. These show up in "Ajouter une charge" (add extra charge)
+  with a quantity field, and the amount is computed automatically
+  (quantite x prix).
 
 ## Day-to-day workflow
 
-- Staff drop photos straight into each category's folder under the studio root
-  all day. The **Home / Today** tab auto-refreshes every 10 seconds (or click
-  Refresh) to show live counts, per-category subtotals, and the grand total.
-- Use **"+ Add charge"** on Home for one-off extras (reprints, rush fees,
-  frames, etc.), optionally linked to a Stock item so the quantity used is
-  deducted automatically.
-- Manage consumables in the **Stock** tab - search, filter by low/out-of-stock,
-  add/edit/delete, and manually restock. Rows go red when a item hits 0, and
-  linked-item dropdowns in "Add charge" flag out-of-stock items too.
-- At the end of the day, click **"🔒 Close Day"** on Home. You'll be asked for
-  the closing password (lockout after the configured number of wrong attempts),
-  then asked to confirm. The app then:
-  1. Moves every category folder's photos into the day's working folder.
-  2. Moves that folder into the archive, named with the actual date.
-  3. Creates fresh, empty category folders ready for the next working day
-     (skipping any closed weekday(s) when deciding what "next day" means).
-  4. Saves a permanent record of counts, prices, custom charges, and the grand
-     total to the database.
-  5. Shows a breakdown screen you can **Print** (via the standard Windows print
-     dialog) or **Export as PDF** (uses the built-in "Microsoft Print to PDF"
-     driver if present - install a third-party PDF printer driver such as
-     CutePDF on machines where it's missing, which is common on Windows 7).
-- Look back at any previous day, and reprint its report, from the **History**
-  tab.
+- Staff drop photos straight into each folder-backed category's folder under
+  the studio root all day. The **Accueil** tab auto-refreshes every 10
+  seconds (or click Actualiser) to show live counts and unit prices per
+  category. (There's deliberately no running total shown here - just the
+  live counts.)
+- Use **"+ Ajouter"** under "Charges additionnelles" for one-off extras
+  (reprints, rush fees, frames, phone-photo prints, etc.). Pick a Stock item
+  or a fixed-price category from the dropdown and the description auto-fills
+  with its name (you can keep typing after it); entering a quantity computes
+  the amount automatically, and picking a Stock item deducts that quantity
+  from stock.
+- Manage consumables in the **Stock** tab, and the category list in
+  **Categories / Tarifs** - both require the administrator password for
+  every add/edit/delete action.
+- **Historique** (History) opens locked - click "Deverrouiller" and enter the
+  administrator password to view or reprint any past closed day.
+- At the end of the day, click **"🔒 Cloturer la journee"** on Accueil.
+  You'll be asked for the administrator password (lockout after the
+  configured number of wrong attempts), then asked to confirm. The app then:
+  1. For each category folder, **deletes any file whose name starts with
+     "re" or "GSW"** (case-insensitive) - *before* counting or copying
+     anything, so rejects/duplicates never make it into the count, the
+     total, or the archive.
+  2. Counts what's left in each folder and moves it into that day's working
+     folder (named from the date, e.g. `07 septembre` - there's no more
+     static "today" folder name).
+  3. Moves that working folder into
+     `archive\<annee>\<mois en francais>\<meme nom>` - creating the year
+     and/or month folder only if they don't already exist.
+  4. Re-creates empty category folders ready for the next working day
+     (skipping any closed weekday(s) when deciding what date that is).
+  5. Saves a permanent record of counts, prices, custom charges, and the
+     grand total to the database.
+  6. Shows a breakdown screen you can **Imprimer** (Print, via the standard
+     Windows print dialog) or **Exporter en PDF** (uses the built-in
+     "Microsoft Print to PDF" driver if present).
 
 ## Editing prices / categories safely
 
@@ -214,3 +244,9 @@ forward but leaves every past report exactly as it was.
 - The app currently recognizes photos placed directly inside each category
   folder (not in sub-subfolders). If staff nest folders further, adjust
   `FolderCountService` to recurse.
+- The purged filename prefixes ("re", "GSW") are hardcoded in
+  `Services/ClosingService.cs` (`PurgedPrefixes`) - edit that array if you need
+  to add/remove a prefix.
+- The single administrator password protects closing the day, all Stock and
+  Categories CRUD, and History access. There's no separate "staff" vs "admin"
+  distinction - anyone who knows that one password can do all of the above.

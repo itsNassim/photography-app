@@ -16,7 +16,7 @@ namespace PhotoStudioApp.UI.Dialogs
         public SetPasswordDialog(bool hasExistingPassword)
         {
             _hasExisting = hasExistingPassword;
-            Text = hasExistingPassword ? "Change closing password" : "Set closing password";
+            Text = hasExistingPassword ? "Changer le mot de passe administrateur" : "Definir le mot de passe administrateur";
             Width = 400;
             Height = hasExistingPassword ? 290 : 230;
             FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -29,27 +29,27 @@ namespace PhotoStudioApp.UI.Dialogs
             int y = 16;
             if (hasExistingPassword)
             {
-                Controls.Add(new Label { Text = "Current password:", Left = 20, Top = y, AutoSize = true });
+                Controls.Add(new Label { Text = "Mot de passe actuel :", Left = 20, Top = y, AutoSize = true });
                 _currentBox = new TextBox { Left = 20, Top = y + 22, Width = 340, UseSystemPasswordChar = true };
                 Controls.Add(_currentBox);
                 y += 60;
             }
 
-            Controls.Add(new Label { Text = "New password:", Left = 20, Top = y, AutoSize = true });
+            Controls.Add(new Label { Text = "Nouveau mot de passe :", Left = 20, Top = y, AutoSize = true });
             _newBox = new TextBox { Left = 20, Top = y + 22, Width = 340, UseSystemPasswordChar = true };
             Controls.Add(_newBox);
             y += 60;
 
-            Controls.Add(new Label { Text = "Confirm new password:", Left = 20, Top = y, AutoSize = true });
+            Controls.Add(new Label { Text = "Confirmer le nouveau mot de passe :", Left = 20, Top = y, AutoSize = true });
             _confirmBox = new TextBox { Left = 20, Top = y + 22, Width = 340, UseSystemPasswordChar = true };
             Controls.Add(_confirmBox);
             y += 60;
 
-            var okBtn = Theme.MakePrimaryButton("Save");
-            okBtn.Left = 160; okBtn.Top = y; okBtn.Width = 100;
+            var okBtn = Theme.MakePrimaryButton("Enregistrer");
+            okBtn.Left = 150; okBtn.Top = y; okBtn.Width = 110;
             okBtn.Click += OkBtn_Click;
-            var cancelBtn = Theme.MakeSecondaryButton("Cancel");
-            cancelBtn.Left = 260; cancelBtn.Top = y; cancelBtn.Width = 100;
+            var cancelBtn = Theme.MakeSecondaryButton("Annuler");
+            cancelBtn.Left = 270; cancelBtn.Top = y; cancelBtn.Width = 100;
             cancelBtn.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
             Controls.Add(okBtn);
             Controls.Add(cancelBtn);
@@ -62,17 +62,17 @@ namespace PhotoStudioApp.UI.Dialogs
         {
             if (_hasExisting && string.IsNullOrEmpty(_currentBox.Text))
             {
-                MessageBox.Show("Enter the current password.", "Missing info", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Entrez le mot de passe actuel.", "Information manquante", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             if (string.IsNullOrEmpty(_newBox.Text) || _newBox.Text.Length < 4)
             {
-                MessageBox.Show("New password must be at least 4 characters.", "Too short", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Le nouveau mot de passe doit contenir au moins 4 caracteres.", "Trop court", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             if (_newBox.Text != _confirmBox.Text)
             {
-                MessageBox.Show("Passwords do not match.", "Mismatch", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Les mots de passe ne correspondent pas.", "Non concordant", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 

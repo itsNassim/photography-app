@@ -16,7 +16,7 @@ namespace PhotoStudioApp.UI.Dialogs
 
         public AddEditStockDialog(StockItem existing = null)
         {
-            Text = existing == null ? "Add stock item" : "Edit stock item";
+            Text = existing == null ? "Ajouter un article de stock" : "Modifier l'article de stock";
             Width = 440;
             Height = 340;
             FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -30,31 +30,31 @@ namespace PhotoStudioApp.UI.Dialogs
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
-            layout.Controls.Add(new Label { Text = "Name:", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 0);
+            layout.Controls.Add(new Label { Text = "Nom :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 0);
             _nameBox = new TextBox { Width = 220, Text = existing?.Name ?? "" };
             layout.Controls.Add(_nameBox, 1, 0);
 
-            layout.Controls.Add(new Label { Text = "Category (optional):", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 1);
+            layout.Controls.Add(new Label { Text = "Categorie (optionnel) :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 1);
             _categoryBox = new TextBox { Width = 220, Text = existing?.Category ?? "" };
             layout.Controls.Add(_categoryBox, 1, 1);
 
-            layout.Controls.Add(new Label { Text = "Quantity:", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 2);
+            layout.Controls.Add(new Label { Text = "Quantite :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 2);
             _qtyBox = new NumericUpDown { Width = 120, Minimum = 0, Maximum = 1000000, Value = existing?.Quantity ?? 0 };
             layout.Controls.Add(_qtyBox, 1, 2);
 
-            layout.Controls.Add(new Label { Text = "Unit price:", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 3);
+            layout.Controls.Add(new Label { Text = "Prix unitaire :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 3);
             _priceBox = new NumericUpDown { Width = 120, Minimum = 0, Maximum = 1000000, DecimalPlaces = 2, Value = existing?.UnitPrice ?? 0 };
             layout.Controls.Add(_priceBox, 1, 3);
 
-            layout.Controls.Add(new Label { Text = "Low-stock threshold:", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 4);
+            layout.Controls.Add(new Label { Text = "Seuil de stock bas :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 4);
             _lowStockBox = new NumericUpDown { Width = 120, Minimum = 0, Maximum = 1000000, Value = existing?.LowStockThreshold ?? 0 };
             layout.Controls.Add(_lowStockBox, 1, 4);
 
             var btnPanel = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Dock = DockStyle.Fill };
-            var okBtn = Theme.MakePrimaryButton("Save");
-            okBtn.Width = 100;
+            var okBtn = Theme.MakePrimaryButton("Enregistrer");
+            okBtn.Width = 110;
             okBtn.Click += OkBtn_Click;
-            var cancelBtn = Theme.MakeSecondaryButton("Cancel");
+            var cancelBtn = Theme.MakeSecondaryButton("Annuler");
             cancelBtn.Width = 100;
             cancelBtn.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
             btnPanel.Controls.Add(okBtn);
@@ -70,7 +70,7 @@ namespace PhotoStudioApp.UI.Dialogs
         {
             if (string.IsNullOrWhiteSpace(_nameBox.Text))
             {
-                MessageBox.Show("Item name is required.", "Missing info", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Le nom de l'article est obligatoire.", "Information manquante", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 

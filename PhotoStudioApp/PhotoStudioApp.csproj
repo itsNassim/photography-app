@@ -78,7 +78,9 @@
     <Compile Include="Services\ClosingService.cs" />
     <Compile Include="Services\ReportPrintService.cs" />
     <Compile Include="Services\WorkdayCalculator.cs" />
+    <Compile Include="Services\AppCulture.cs" />
     <Compile Include="UI\Theme.cs" />
+    <Compile Include="UI\AuthGate.cs" />
     <Compile Include="UI\MainForm.cs" />
     <Compile Include="UI\HomeTab.cs" />
     <Compile Include="UI\StockTab.cs" />

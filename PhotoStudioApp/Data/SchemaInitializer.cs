@@ -27,7 +27,8 @@ namespace PhotoStudioApp.Data
                     CREATE TABLE IF NOT EXISTS Categories (
                         Id                  INTEGER PRIMARY KEY AUTOINCREMENT,
                         Name                TEXT NOT NULL,
-                        FolderRelativePath  TEXT NOT NULL,
+                        HasFolder           INTEGER NOT NULL DEFAULT 1,
+                        FolderRelativePath  TEXT,
                         IsCustom            INTEGER NOT NULL DEFAULT 1,
                         IsActive            INTEGER NOT NULL DEFAULT 1
                     );");
@@ -58,6 +59,7 @@ namespace PhotoStudioApp.Data
                         Description          TEXT NOT NULL,
                         Amount               REAL NOT NULL,
                         LinkedStockItemId    INTEGER REFERENCES StockItems(Id),
+                        LinkedCategoryId     INTEGER REFERENCES Categories(Id),
                         Quantity             INTEGER,
                         CreatedAt            TEXT NOT NULL
                     );");
@@ -92,8 +94,41 @@ namespace PhotoStudioApp.Data
                 tx.Commit();
             }
 
+            // Migration path for databases created by earlier versions of this app, before
+            // HasFolder / LinkedCategoryId existed - CREATE TABLE IF NOT EXISTS above won't
+            // add columns to an already-existing table, so do that here if needed.
+            AddColumnIfMissing("Categories", "HasFolder", "INTEGER NOT NULL DEFAULT 1");
+            AddColumnIfMissing("CustomCharges", "LinkedCategoryId", "INTEGER REFERENCES Categories(Id)");
+
             if (isNew)
                 SeedDefaults();
+        }
+
+        private static void AddColumnIfMissing(string table, string column, string columnDefSql)
+        {
+            using (var conn = Db.OpenConnection())
+            {
+                bool exists = false;
+                using (var cmd = new SQLiteCommand($"PRAGMA table_info({table});", conn))
+                using (var r = cmd.ExecuteReader())
+                {
+                    while (r.Read())
+                    {
+                        // column 1 in PRAGMA table_info output is the column name
+                        if (string.Equals(r.GetString(1), column, StringComparison.OrdinalIgnoreCase))
+                        {
+                            exists = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!exists)
+                {
+                    using (var cmd = new SQLiteCommand($"ALTER TABLE {table} ADD COLUMN {column} {columnDefSql};", conn))
+                        cmd.ExecuteNonQuery();
+                }
+            }
         }
 
         private static void SeedDefaults()
@@ -110,21 +145,20 @@ namespace PhotoStudioApp.Data
 
             settingsRepo.Set("StudioRootPath", defaultRoot);
             settingsRepo.Set("ArchiveRootPath", defaultArchive);
-            settingsRepo.Set("TodayFolderName", "today");
-            settingsRepo.Set("DateFolderFormat", "dd-MMMM");
+            settingsRepo.Set("DateFolderFormat", "dd MMMM");
             settingsRepo.Set("ClosedWeekdaysCsv", "Friday");
             settingsRepo.Set("MaxPasswordAttempts", "5");
             settingsRepo.Set("CurrentWorkDate", DateTime.Today.ToString("yyyy-MM-dd"));
             settingsRepo.Set("PasswordHash", null);
             settingsRepo.Set("PasswordSalt", null);
 
-            // Default/fixed categories exactly as specified.
-            categoryRepo.AddCategory("8 identite", "8 identite", isCustom: false, initialPrice: 0m);
-            categoryRepo.AddCategory("4 identite", "4 identite", isCustom: false, initialPrice: 0m);
-            categoryRepo.AddCategory("4 visa", "4 visa", isCustom: false, initialPrice: 0m);
-            categoryRepo.AddCategory("8 visa", "8 visa", isCustom: false, initialPrice: 0m);
-            categoryRepo.AddCategory("12 identite (amature)", Path.Combine("amature", "12 identite"), isCustom: false, initialPrice: 0m);
-            categoryRepo.AddCategory("16 identite (amature)", Path.Combine("amature", "16 identite"), isCustom: false, initialPrice: 0m);
+            // Default/fixed categories exactly as specified - all folder-backed.
+            categoryRepo.AddCategory("8 identite", true, "8 identite", isCustom: false, initialPrice: 0m);
+            categoryRepo.AddCategory("4 identite", true, "4 identite", isCustom: false, initialPrice: 0m);
+            categoryRepo.AddCategory("4 visa", true, "4 visa", isCustom: false, initialPrice: 0m);
+            categoryRepo.AddCategory("8 visa", true, "8 visa", isCustom: false, initialPrice: 0m);
+            categoryRepo.AddCategory("12 identite (amature)", true, Path.Combine("amature", "12 identite"), isCustom: false, initialPrice: 0m);
+            categoryRepo.AddCategory("16 identite (amature)", true, Path.Combine("amature", "16 identite"), isCustom: false, initialPrice: 0m);
         }
 
         private static void Exec(SQLiteConnection conn, string sql)

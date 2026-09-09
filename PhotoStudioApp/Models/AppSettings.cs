@@ -10,10 +10,10 @@ namespace PhotoStudioApp.Models
     {
         public string StudioRootPath { get; set; }
         public string ArchiveRootPath { get; set; }
-        public string TodayFolderName { get; set; } = "today";
-        /// <summary>Format string (DateTime.ToString) used both for the "today" folder display name
-        /// and for the archived folder name, e.g. "dd-MMMM" or "yyyy-MM-dd".</summary>
-        public string DateFolderFormat { get; set; } = "dd-MMMM";
+        /// <summary>Format string (DateTime.ToString, French culture) used for the daily working
+        /// folder's name and the day-level archive folder name, e.g. "dd MMMM" -> "07 septembre".
+        /// The working folder is always named this way now - there is no more static "today" name.</summary>
+        public string DateFolderFormat { get; set; } = "dd MMMM";
         public string PasswordHash { get; set; }
         public string PasswordSalt { get; set; }
         /// <summary>Comma-separated System.DayOfWeek values that are skipped when computing "tomorrow".</summary>

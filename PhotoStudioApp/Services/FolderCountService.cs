@@ -29,6 +29,30 @@ namespace PhotoStudioApp.Services
             Directory.CreateDirectory(absoluteFolderPath);
         }
 
+        /// <summary>Deletes any file directly inside the folder whose name starts with one of
+        /// the given prefixes (case-insensitive) - used to purge rejects/duplicates (e.g. "re...",
+        /// "GSW...") from a category folder BEFORE counting or moving anything at close time.
+        /// Returns the number of files deleted. Does nothing (returns 0) if the folder doesn't exist.</summary>
+        public int DeleteFilesWithPrefixes(string absoluteFolderPath, params string[] prefixes)
+        {
+            if (!Directory.Exists(absoluteFolderPath) || prefixes == null || prefixes.Length == 0)
+                return 0;
+
+            int deleted = 0;
+            foreach (var file in Directory.EnumerateFiles(absoluteFolderPath).ToList())
+            {
+                string name = Path.GetFileName(file);
+                bool matches = prefixes.Any(p => !string.IsNullOrEmpty(p) &&
+                    name.StartsWith(p, StringComparison.OrdinalIgnoreCase));
+                if (matches)
+                {
+                    File.Delete(file);
+                    deleted++;
+                }
+            }
+            return deleted;
+        }
+
         /// <summary>Moves every photo file from source into destination (creating destination if
         /// needed). Non-photo files are left behind. Returns the number of files moved.</summary>
         public int MovePhotos(string sourceFolder, string destFolder)
@@ -79,7 +103,7 @@ namespace PhotoStudioApp.Services
         public void MoveDirectory(string sourceDir, string destDir)
         {
             if (Directory.Exists(destDir))
-                throw new IOException($"A folder already exists at the destination:\n{destDir}");
+                throw new IOException($"Un dossier existe deja a cet emplacement :\n{destDir}");
 
             string parent = Path.GetDirectoryName(destDir);
             if (!string.IsNullOrEmpty(parent))
