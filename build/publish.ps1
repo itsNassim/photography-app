@@ -9,10 +9,13 @@
 
   Requirements on the BUILD machine (not the target Win7 machine):
     - Visual Studio 2019/2022 Build Tools (or full VS) with the
-      ".NET desktop development" workload, PLUS the .NET Framework 4.6
-      targeting pack added separately (the workload only bundles 4.7.2/4.8
-      by default) - via VS Installer > Modify > Individual components, or
-      the standalone "Developer Pack": choco install netfx-4.6-devpack -y
+      ".NET desktop development" workload. You do NOT need to separately
+      install the .NET Framework 4.6 targeting pack - this script downloads
+      the Microsoft.NETFramework.ReferenceAssemblies.net46 NuGet package
+      directly and PhotoStudioApp.csproj imports it, exactly the same
+      deterministic way it already handles the SQLite package below. (An
+      actual system-wide devpack install works too if you have one, but
+      isn't required.)
     - Internet access to nuget.org (this script downloads the
       System.Data.SQLite.Core package directly, deterministically -
       it does not rely on "nuget.exe restore").
@@ -30,6 +33,34 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path | Split-Path -Parent
 Set-Location $root
+
+Write-Host "== Restoring Microsoft.NETFramework.ReferenceAssemblies.net46 (direct download) ==" -ForegroundColor Cyan
+# Lets PhotoStudioApp.csproj build against .NET Framework 4.6 without needing that exact
+# Developer Pack/targeting pack installed system-wide - see PhotoStudioApp.csproj's
+# NetFx46RefAssembliesPackageDir property and the Import that uses it.
+$refPkgId = "Microsoft.NETFramework.ReferenceAssemblies.net46"
+$refPkgVersion = "1.0.3"
+$packagesDir = Join-Path $root "packages"
+$refPkgDir = Join-Path $packagesDir "$refPkgId.$refPkgVersion"
+$expectedRefTargets = Join-Path $refPkgDir "build\$refPkgId.targets"
+
+if (Test-Path $expectedRefTargets) {
+    Write-Host "Already present at $expectedRefTargets - skipping download." -ForegroundColor Green
+} else {
+    New-Item -ItemType Directory -Force -Path $packagesDir | Out-Null
+    $refZipPath = Join-Path $env:TEMP "$refPkgId.$refPkgVersion.nupkg.zip"
+    Write-Host "Downloading $refPkgId $refPkgVersion from nuget.org ..."
+    Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/$refPkgId/$refPkgVersion" -OutFile $refZipPath -UseBasicParsing
+    Write-Host "Extracting into $refPkgDir ..."
+    Expand-Archive -Path $refZipPath -DestinationPath $refPkgDir -Force
+
+    if (-not (Test-Path $expectedRefTargets)) {
+        Write-Host "Package contents (for debugging):"
+        Get-ChildItem -Recurse $refPkgDir | ForEach-Object { Write-Host $_.FullName }
+        throw "Downloaded the package but did not find the expected targets file at $expectedRefTargets."
+    }
+    Write-Host "OK - restored to $expectedRefTargets" -ForegroundColor Green
+}
 
 Write-Host "== Restoring Stub.System.Data.SQLite.Core.NetFramework (direct download, not nuget restore) ==" -ForegroundColor Cyan
 # NOTE: "System.Data.SQLite.Core" is an empty meta-package as of 1.0.116+ - the real

@@ -23,6 +23,16 @@
          package's own build target (which has known flakiness in headless/CI builds). -->
     <SQLiteStubPackageDir>..\packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.118\build\net46\</SQLiteStubPackageDir>
     <ContentSQLiteInteropFiles>true</ContentSQLiteInteropFiles>
+    <!-- Deterministic fix for MSB3644 ("reference assemblies for .NETFramework,Version=v4.6
+         were not found"): windows-latest's bundled VS only ships the 4.7.2/4.8 targeting
+         packs, not the plain 4.6 one, and installing the system-wide Developer Pack in CI
+         turned out not to reliably take effect before the build step runs. Instead, this
+         points at the officially Microsoft-published Microsoft.NETFramework.ReferenceAssemblies.net46
+         NuGet package (downloaded the same direct way as the SQLite package above - see
+         PhotoStudioApp.csproj's Import near the bottom, and .github/workflows/build.yml),
+         which ships the actual v4.6 reference assemblies as package content - no system-wide
+         install needed at all. -->
+    <NetFx46RefAssembliesPackageDir>..\packages\Microsoft.NETFramework.ReferenceAssemblies.net46.1.0.3\</NetFx46RefAssembliesPackageDir>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
     <PlatformTarget>x86</PlatformTarget>
@@ -107,6 +117,16 @@
     </Content>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+
+  <!-- MUST come before the standard Reference resolution runs (GetReferenceAssemblyPaths is
+       part of the ResolveReferences pipeline pulled in by Microsoft.CSharp.targets above, but
+       MSBuild fully evaluates properties/items from ALL imports before executing any target -
+       so being textually after the import above is fine, and matches exactly how NuGet itself
+       auto-adds this kind of import for packages.config-style projects). Sets
+       TargetFrameworkRootPath so GetReferenceAssemblyPaths finds v4.6 reference assemblies
+       inside the NuGet package instead of needing them installed system-wide. See
+       NetFx46RefAssembliesPackageDir above for why this exists. -->
+  <Import Project="$(NetFx46RefAssembliesPackageDir)build\Microsoft.NETFramework.ReferenceAssemblies.net46.targets" Condition="Exists('$(NetFx46RefAssembliesPackageDir)build\Microsoft.NETFramework.ReferenceAssemblies.net46.targets')" />
 
   <!-- Best-effort: the Stub package's own build target, if MSBuild honors it. -->
   <Import Project="$(SQLiteStubPackageDir)Stub.System.Data.SQLite.Core.NetFramework.targets" Condition="Exists('$(SQLiteStubPackageDir)Stub.System.Data.SQLite.Core.NetFramework.targets')" />

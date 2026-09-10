@@ -10,9 +10,10 @@
 
   Requirements on the BUILD machine (not the target Windows 7 machine):
     - Visual Studio 2019/2022 Build Tools (or full VS) with the
-      ".NET desktop development" workload, PLUS the .NET Framework 4.6
-      targeting pack added separately (not bundled by default - see
-      README.md): choco install netfx-4.6-devpack -y
+      ".NET desktop development" workload. The .NET Framework 4.6 targeting
+      pack does NOT need to be installed separately - publish.ps1 (called
+      below) downloads the Microsoft.NETFramework.ReferenceAssemblies.net46
+      NuGet package directly instead. See README.md for details.
     - NuGet.exe on PATH (or packages already restored via Visual Studio once).
     - Inno Setup 6, free: https://jrsoftware.org/isinfo.php
       (installs ISCC.exe, normally at

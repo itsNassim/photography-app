@@ -68,21 +68,21 @@ build folder - if you'd rather xcopy-deploy instead of using the installer.)
 
 You need a **Windows machine** (or a Windows VM) with **Visual Studio 2019 or 2022**
 (Community edition is fine) and the **".NET desktop development"** workload
-installed. That workload bundles the 4.7.2/4.8 targeting packs by default, but
-**not** the .NET Framework 4.6 one this project needs - add it separately via
-the Visual Studio Installer → *Modify* → *Individual components* → search for
-".NET Framework 4.6 targeting pack" (or download the standalone
-[.NET Framework 4.6 Developer Pack](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net46)
-from Microsoft). Without it, building locally fails with the same MSB3644
-"reference assemblies ... were not found" error that CI works around with
-`choco install netfx-4.6-devpack` (see `.github/workflows/build.yml`).
+installed. You do **not** need to separately install the .NET Framework 4.6
+targeting pack (the workload only bundles 4.7.2/4.8 by default) - step 2 below
+downloads the `Microsoft.NETFramework.ReferenceAssemblies.net46` NuGet package
+directly and `PhotoStudioApp.csproj` imports it, the same deterministic,
+no-system-install way it already handles the SQLite package. (CI uses the
+identical approach - see `.github/workflows/build.yml` - after an earlier
+attempt to `choco install netfx-4.6-devpack` turned out not to reliably take
+effect before the build step ran.)
 
 1. Open `PhotoStudioApp.sln` in Visual Studio.
-2. This project restores its one NuGet dependency
-   (`Stub.System.Data.SQLite.Core.NetFramework`) by direct download rather than
-   Visual Studio's automatic restore (that flow proved unreliable in CI) - run
-   `.\build\publish.ps1` once first (it downloads and unpacks the package), or
-   see that script's restore step if you'd rather do it by hand.
+2. This project restores its NuGet dependencies (the SQLite package and the
+   .NET Framework 4.6 reference assemblies, see above) by direct download
+   rather than Visual Studio's automatic restore (that flow proved unreliable
+   in CI) - run `.\build\publish.ps1` once first (it downloads and unpacks
+   both), or see that script's restore steps if you'd rather do it by hand.
 3. Set the solution platform to **x86** (top toolbar) - this matches the
    `PlatformTarget` in the project and keeps the native SQLite interop DLL
    selection simple across 32-bit and 64-bit Windows 7.
