@@ -32,7 +32,7 @@
          .github/workflows/build.yml and build/publish.ps1), which ships the actual v4.6
          reference assemblies as package content - no system-wide install needed at all. The
          properties below (TargetFrameworkRootPath etc.) are set directly from it further down. -->
-    <NetFx46RefAssembliesPackageDir>..\packages\Microsoft.NETFramework.ReferenceAssemblies.net46.1.0.3\</NetFx46RefAssembliesPackageDir>
+    <NetFx46RefAssembliesPackageDir>$(MSBuildProjectDirectory)\..\packages\Microsoft.NETFramework.ReferenceAssemblies.net46.1.0.3\</NetFx46RefAssembliesPackageDir>
     <!-- Set directly and UNCONDITIONALLY, rather than by importing the vendor package's own
          .targets file (which gates on "$(TargetFrameworkIdentifier) == '.NETFramework'" -
          that property is not guaranteed to already be resolved to that value at plain
@@ -40,7 +40,18 @@
          so that condition can silently fail to match - which is exactly what happened when
          this was first tried as an Import: it did not fix the MSB3644 error). Setting these
          properties unconditionally is safe here since this project only ever targets v4.6,
-         single-TFM, always. -->
+         single-TFM, always.
+         IMPORTANT: NetFx46RefAssembliesPackageDir above is built from $(MSBuildProjectDirectory)
+         and is therefore an ABSOLUTE path, not a bare "..\..." relative one. This matters
+         because TargetFrameworkRootPath is consumed as a plain string by the
+         GetReferenceAssemblyPaths TASK (not via MSBuild's Import/Reference/Exists() engine
+         machinery, which resolves relative paths against the project directory automatically).
+         A raw relative path handed to a Task is instead resolved against the process's current
+         working directory - which for a solution build is the SOLUTION folder, one level above
+         the project folder - so a relative "..\packages\..." pointed one directory too far up
+         and silently resolved to a path that doesn't exist. This cost two failed CI attempts to
+         diagnose (see the diagnostic target below and areas/photostudio-app.md bug #8) - if this
+         property is ever changed again, keep it absolute. -->
     <TargetFrameworkRootPath>$(NetFx46RefAssembliesPackageDir)build\</TargetFrameworkRootPath>
     <EnableFrameworkPathOverride>false</EnableFrameworkPathOverride>
     <NoStdLib>true</NoStdLib>
@@ -146,10 +157,15 @@
     <PropertyGroup>
       <_NetFx46ResolvedRefDir>$(TargetFrameworkRootPath).NETFramework\v4.6\</_NetFx46ResolvedRefDir>
     </PropertyGroup>
+    <ItemGroup>
+      <_NetFx46MscorlibCheck Include="$(_NetFx46ResolvedRefDir)mscorlib.dll" Condition="Exists('$(_NetFx46ResolvedRefDir)mscorlib.dll')" />
+    </ItemGroup>
+    <Message Importance="high" Text="[diag] MSBuildProjectDirectory        = $(MSBuildProjectDirectory)" />
     <Message Importance="high" Text="[diag] NetFx46RefAssembliesPackageDir = $(NetFx46RefAssembliesPackageDir)" />
     <Message Importance="high" Text="[diag] TargetFrameworkRootPath        = $(TargetFrameworkRootPath)" />
     <Message Importance="high" Text="[diag] Resolved ref assemblies dir    = $(_NetFx46ResolvedRefDir)" />
-    <Message Importance="high" Text="[diag] That directory exists on disk  = $([System.IO.Directory]::Exists('$(_NetFx46ResolvedRefDir)'))" />
+    <Message Importance="high" Text="[diag] Dir exists (System.IO check)   = $([System.IO.Directory]::Exists('$(_NetFx46ResolvedRefDir)'))" />
+    <Message Importance="high" Text="[diag] mscorlib.dll found (Exists())  = @(_NetFx46MscorlibCheck->Count()) match(es)" />
   </Target>
 
   <!-- Guaranteed fallback: this package's own copy-to-output target is known to be flaky
