@@ -1,6 +1,8 @@
 using System;
 using System.Windows.Forms;
 using PhotoStudioApp.Data;
+using PhotoStudioApp.Models;
+using PhotoStudioApp.Services;
 using PhotoStudioApp.UI.Dialogs;
 
 namespace PhotoStudioApp.UI
@@ -8,6 +10,8 @@ namespace PhotoStudioApp.UI
     public class HistoryTab : UserControl
     {
         private readonly DailyCloseRepository _repo = new DailyCloseRepository();
+        private readonly ArchiveCleanupService _cleanupService = new ArchiveCleanupService();
+        private readonly SettingsRepository _settingsRepo = new SettingsRepository();
         private DataGridView _grid;
         private Panel _lockedPanel;
         private Panel _contentPanel;
@@ -66,8 +70,20 @@ namespace PhotoStudioApp.UI
             var refreshBtn = Theme.MakeSecondaryButton("⟳ Actualiser");
             refreshBtn.Width = 130;
             refreshBtn.Click += (s, e) => LoadHistory();
+            var deleteBtn = Theme.MakeDangerButton("Supprimer");
+            deleteBtn.Width = 110;
+            deleteBtn.Click += DeleteBtn_Click;
+            var cleanupBtn = Theme.MakeSecondaryButton("Nettoyer les anciennes archives");
+            cleanupBtn.Width = 260;
+            cleanupBtn.Click += CleanupBtn_Click;
+            var clearAllBtn = Theme.MakeDangerButton("Tout supprimer");
+            clearAllBtn.Width = 140;
+            clearAllBtn.Click += ClearAllBtn_Click;
             toolbar.Controls.Add(viewBtn);
             toolbar.Controls.Add(refreshBtn);
+            toolbar.Controls.Add(deleteBtn);
+            toolbar.Controls.Add(cleanupBtn);
+            toolbar.Controls.Add(clearAllBtn);
             root.Controls.Add(toolbar, 0, 1);
 
             var gridPanel = new Panel { Dock = DockStyle.Fill, BackColor = Theme.CardBackground };
@@ -141,6 +157,84 @@ namespace PhotoStudioApp.UI
 
             using (var breakdown = new BreakdownReportForm(full))
                 breakdown.ShowDialog();
+        }
+
+        private void DeleteBtn_Click(object sender, EventArgs e)
+        {
+            if (_grid.CurrentRow?.Tag == null) return;
+            int id = (int)_grid.CurrentRow.Tag;
+            var close = _repo.GetFullById(id);
+            if (close == null) return;
+
+            if (!AuthGate.RequireAdminPassword(this)) return;
+
+            if (MessageBox.Show(
+                $"Supprimer definitivement la journee du {close.CloseDate} ?\n\n" +
+                $"Cela supprime aussi le dossier archive :\n{close.ArchiveFolderPath}\n\n" +
+                "Cette action est irreversible.",
+                "Confirmer la suppression", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                return;
+
+            _cleanupService.DeleteSingle(close);
+            LoadHistory();
+        }
+
+        private void CleanupBtn_Click(object sender, EventArgs e)
+        {
+            var settings = _settingsRepo.LoadAll();
+            if (settings.ArchiveRetentionDays <= 0)
+            {
+                MessageBox.Show(
+                    "La duree de conservation n'est pas configuree (0 = desactive).\n" +
+                    "Definissez-la dans l'onglet Parametres pour utiliser ce bouton.",
+                    "Nettoyage non configure", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var candidates = _cleanupService.FindClosesOlderThan(settings.ArchiveRetentionDays);
+            if (candidates.Count == 0)
+            {
+                MessageBox.Show(
+                    $"Aucune archive de plus de {settings.ArchiveRetentionDays} jour(s) a nettoyer.",
+                    "Rien a nettoyer", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (!AuthGate.RequireAdminPassword(this)) return;
+
+            if (MessageBox.Show(
+                $"{candidates.Count} journee(s) de plus de {settings.ArchiveRetentionDays} jour(s) vont etre " +
+                "supprimees definitivement (dossiers archives + historique). Continuer ?",
+                "Confirmer le nettoyage", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                return;
+
+            int deleted = _cleanupService.CleanupOlderThanConfiguredRetention();
+            LoadHistory();
+            MessageBox.Show($"{deleted} journee(s) supprimee(s).", "Nettoyage termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void ClearAllBtn_Click(object sender, EventArgs e)
+        {
+            if (!AuthGate.RequireAdminPassword(this)) return;
+
+            if (MessageBox.Show(
+                "Ceci va supprimer DEFINITIVEMENT TOUTES les archives photo et TOUT l'historique.\n\n" +
+                "Cette action est IRREVERSIBLE et ne peut pas etre annulee.\n\n" +
+                "Voulez-vous continuer ?",
+                "Attention - suppression totale", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                return;
+
+            using (var confirm = new TypeToConfirmDialog(
+                "Vous etes sur le point de supprimer TOUTES les archives et TOUT l'historique.",
+                "SUPPRIMER"))
+            {
+                if (confirm.ShowDialog(this) != DialogResult.OK)
+                    return;
+            }
+
+            _cleanupService.DeleteAll();
+            LoadHistory();
+            MessageBox.Show("Toutes les archives et l'historique ont ete supprimes.", "Termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
     }
 }

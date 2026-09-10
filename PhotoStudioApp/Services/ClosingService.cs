@@ -24,10 +24,6 @@ namespace PhotoStudioApp.Services
 
     public class ClosingService
     {
-        /// <summary>Filename prefixes purged from each category folder BEFORE counting or
-        /// moving anything, every time the day is closed (rejects/duplicates from the lab).</summary>
-        private static readonly string[] PurgedPrefixes = { "re", "GSW" };
-
         private readonly FolderCountService _folders = new FolderCountService();
         private readonly CategoryRepository _categoryRepo = new CategoryRepository();
         private readonly CustomChargeRepository _chargeRepo = new CustomChargeRepository();
@@ -54,6 +50,12 @@ namespace PhotoStudioApp.Services
             // "service") categories never appear here - their revenue is captured entirely
             // through the custom charges created against them during the day.
             var categories = _categoryRepo.GetActiveFolderCategories();
+
+            string[] purgedPrefixes = (settings.PurgedFilePrefixesCsv ?? "")
+                .Split(',')
+                .Select(p => p.Trim())
+                .Where(p => p.Length > 0)
+                .ToArray();
 
             DateTime closeDateValue = DateTime.ParseExact(settings.CurrentWorkDate, "yyyy-MM-dd", null);
             string workingFolderName = closeDateValue.ToString(settings.DateFolderFormat, AppCulture.French);
@@ -86,7 +88,7 @@ namespace PhotoStudioApp.Services
                     continue;
                 }
 
-                _folders.DeleteFilesWithPrefixes(catAbs, PurgedPrefixes);
+                _folders.DeleteFilesWithPrefixes(catAbs, purgedPrefixes);
 
                 int count = _folders.CountPhotos(catAbs);
                 totalPhotosFound += count;

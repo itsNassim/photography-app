@@ -90,16 +90,22 @@ namespace PhotoStudioApp.UI
                 {
                     row.DefaultCellStyle.BackColor = Theme.WarningBackground;
                     row.DefaultCellStyle.ForeColor = Theme.Warning;
+                    row.DefaultCellStyle.SelectionBackColor = Theme.WarningSelectionBackColor;
+                    row.DefaultCellStyle.SelectionForeColor = Theme.WarningSelectionForeColor;
                 }
                 else if (item.IsLowStock)
                 {
                     row.DefaultCellStyle.BackColor = Theme.LowStockBackground;
-                    row.DefaultCellStyle.ForeColor = Theme.TextDark;
+                    row.DefaultCellStyle.ForeColor = Theme.LowStockColor;
+                    row.DefaultCellStyle.SelectionBackColor = Theme.LowStockSelectionBackColor;
+                    row.DefaultCellStyle.SelectionForeColor = Theme.LowStockSelectionForeColor;
                 }
                 else
                 {
                     row.DefaultCellStyle.BackColor = Theme.CardBackground;
                     row.DefaultCellStyle.ForeColor = Theme.TextDark;
+                    row.DefaultCellStyle.SelectionBackColor = Theme.SelectionBackColor;
+                    row.DefaultCellStyle.SelectionForeColor = Theme.SelectionForeColor;
                 }
             }
         }

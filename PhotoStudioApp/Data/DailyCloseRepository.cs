@@ -143,5 +143,47 @@ namespace PhotoStudioApp.Data
             }
             return close;
         }
+
+        /// <summary>Deletes one closed day's DB record (and its line items / custom charges).
+        /// Does NOT touch the filesystem - callers that also need the archive folder removed
+        /// should do that themselves (see Services/ArchiveCleanupService).</summary>
+        public void DeleteClose(int id)
+        {
+            using (var conn = Db.OpenConnection())
+            using (var tx = conn.BeginTransaction())
+            {
+                Exec(conn, tx, "DELETE FROM DailyCloseLineItems WHERE DailyCloseId=@id;", id);
+                Exec(conn, tx, "DELETE FROM DailyCloseCustomCharges WHERE DailyCloseId=@id;", id);
+                Exec(conn, tx, "DELETE FROM DailyCloses WHERE Id=@id;", id);
+                tx.Commit();
+            }
+        }
+
+        /// <summary>Wipes every closed-day record from the database (all history, all line
+        /// items, all custom-charge snapshots). Does NOT touch the filesystem - see
+        /// Services/ArchiveCleanupService for deleting the actual archived folders.</summary>
+        public void DeleteAllHistory()
+        {
+            using (var conn = Db.OpenConnection())
+            using (var tx = conn.BeginTransaction())
+            {
+                using (var cmd = new SQLiteCommand("DELETE FROM DailyCloseLineItems;", conn, tx))
+                    cmd.ExecuteNonQuery();
+                using (var cmd = new SQLiteCommand("DELETE FROM DailyCloseCustomCharges;", conn, tx))
+                    cmd.ExecuteNonQuery();
+                using (var cmd = new SQLiteCommand("DELETE FROM DailyCloses;", conn, tx))
+                    cmd.ExecuteNonQuery();
+                tx.Commit();
+            }
+        }
+
+        private void Exec(SQLiteConnection conn, SQLiteTransaction tx, string sql, int id)
+        {
+            using (var cmd = new SQLiteCommand(sql, conn, tx))
+            {
+                cmd.Parameters.AddWithValue("@id", id);
+                cmd.ExecuteNonQuery();
+            }
+        }
     }
 }

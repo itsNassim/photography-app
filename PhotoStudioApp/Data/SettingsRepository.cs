@@ -40,7 +40,9 @@ namespace PhotoStudioApp.Data
                 PasswordSalt = Get("PasswordSalt"),
                 ClosedWeekdaysCsv = Get("ClosedWeekdaysCsv", "Friday"),
                 CurrentWorkDate = Get("CurrentWorkDate"),
-                MaxPasswordAttempts = int.TryParse(Get("MaxPasswordAttempts", "5"), out var n) ? n : 5
+                MaxPasswordAttempts = int.TryParse(Get("MaxPasswordAttempts", "5"), out var n) ? n : 5,
+                PurgedFilePrefixesCsv = Get("PurgedFilePrefixesCsv", "re,GSW"),
+                ArchiveRetentionDays = int.TryParse(Get("ArchiveRetentionDays", "0"), out var ard) ? ard : 0
             };
         }
 
@@ -54,6 +56,8 @@ namespace PhotoStudioApp.Data
             Set("ClosedWeekdaysCsv", s.ClosedWeekdaysCsv);
             Set("CurrentWorkDate", s.CurrentWorkDate);
             Set("MaxPasswordAttempts", s.MaxPasswordAttempts.ToString());
+            Set("PurgedFilePrefixesCsv", s.PurgedFilePrefixesCsv);
+            Set("ArchiveRetentionDays", s.ArchiveRetentionDays.ToString());
         }
     }
 }

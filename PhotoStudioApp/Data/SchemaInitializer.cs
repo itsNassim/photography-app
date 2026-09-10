@@ -225,6 +225,8 @@ namespace PhotoStudioApp.Data
             settingsRepo.Set("DateFolderFormat", "dd MMMM");
             settingsRepo.Set("ClosedWeekdaysCsv", "Friday");
             settingsRepo.Set("MaxPasswordAttempts", "5");
+            settingsRepo.Set("PurgedFilePrefixesCsv", "re,GSW");
+            settingsRepo.Set("ArchiveRetentionDays", "0");
             settingsRepo.Set("CurrentWorkDate", DateTime.Today.ToString("yyyy-MM-dd"));
             settingsRepo.Set("PasswordHash", null);
             settingsRepo.Set("PasswordSalt", null);

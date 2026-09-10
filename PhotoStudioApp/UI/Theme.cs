@@ -17,7 +17,24 @@ namespace PhotoStudioApp.UI
         public static readonly Color Warning = ColorTranslator.FromHtml("#C62828");      // red - warnings only
         public static readonly Color WarningBackground = ColorTranslator.FromHtml("#FDEAEA");
         public static readonly Color LowStockBackground = ColorTranslator.FromHtml("#FFF6DC");
+        public static readonly Color LowStockColor = ColorTranslator.FromHtml("#8A6D00");  // amber text for low-stock rows
         public static readonly Color BorderGray = ColorTranslator.FromHtml("#D7DDE0");
+
+        // Normal-row selection color (used both by the grid default and explicitly re-applied
+        // to non-warning rows, since setting a row's DefaultCellStyle at all overrides the
+        // grid-level default for that row).
+        public static readonly Color SelectionBackColor = ColorTranslator.FromHtml("#CFE8EA");
+        public static readonly Color SelectionForeColor = TextDark;
+
+        // Selected-state colors for warning/low-stock rows - a plain DataGridView paints every
+        // selected row with the same selection color regardless of that row's own colors, which
+        // would hide the red/yellow warning the moment the row is clicked. These are deliberately
+        // a DARKER/stronger shade of the same red/yellow (not the neutral teal selection color)
+        // so the row still reads as "out of stock" / "low stock" while still looking selected.
+        public static readonly Color WarningSelectionBackColor = ColorTranslator.FromHtml("#C62828"); // solid red
+        public static readonly Color WarningSelectionForeColor = Color.White;
+        public static readonly Color LowStockSelectionBackColor = ColorTranslator.FromHtml("#FFC107"); // solid amber
+        public static readonly Color LowStockSelectionForeColor = ColorTranslator.FromHtml("#3D2E00");
 
         public static readonly Font FontBase = new Font("Segoe UI", 9.5f);
         public static readonly Font FontHeading = new Font("Segoe UI Semibold", 15f, FontStyle.Bold);
@@ -97,8 +114,8 @@ namespace PhotoStudioApp.UI
             grid.ColumnHeadersDefaultCellStyle.Font = FontSubheading;
             grid.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
             grid.DefaultCellStyle.Font = FontBase;
-            grid.DefaultCellStyle.SelectionBackColor = ColorTranslator.FromHtml("#CFE8EA");
-            grid.DefaultCellStyle.SelectionForeColor = TextDark;
+            grid.DefaultCellStyle.SelectionBackColor = SelectionBackColor;
+            grid.DefaultCellStyle.SelectionForeColor = SelectionForeColor;
             grid.AlternatingRowsDefaultCellStyle.BackColor = ColorTranslator.FromHtml("#FAFBFC");
         }
     }

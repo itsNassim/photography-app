@@ -20,6 +20,9 @@ namespace PhotoStudioApp.UI
         private CheckedListBox _closedDaysList;
         private NumericUpDown _maxAttemptsBox;
         private Label _passwordStatusLabel;
+        private ListBox _prefixesList;
+        private TextBox _newPrefixBox;
+        private NumericUpDown _retentionDaysBox;
 
         private static readonly (string Fr, DayOfWeek Value)[] FrenchWeekdays =
         {
@@ -92,6 +95,45 @@ namespace PhotoStudioApp.UI
             card.Controls.Add(_closedDaysList, 1, row);
             row++;
 
+            AddLabel(card, "Prefixes de fichiers a supprimer\na la cloture (ex. \"re\") :", row);
+            var prefixPanel = new TableLayoutPanel { ColumnCount = 1, AutoSize = true };
+            prefixPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            prefixPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            _prefixesList = new ListBox { Width = 200, Height = 90, Font = Theme.FontBase };
+            var prefixInputRow = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 6, 0, 0) };
+            _newPrefixBox = new TextBox { Width = 110, Font = Theme.FontBase };
+            var addPrefixBtn = Theme.MakeSecondaryButton("+ Ajouter");
+            addPrefixBtn.Width = 90;
+            addPrefixBtn.Click += AddPrefixBtn_Click;
+            var removePrefixBtn = Theme.MakeDangerButton("Retirer");
+            removePrefixBtn.Width = 80;
+            removePrefixBtn.Click += RemovePrefixBtn_Click;
+            prefixInputRow.Controls.Add(_newPrefixBox);
+            prefixInputRow.Controls.Add(addPrefixBtn);
+            prefixInputRow.Controls.Add(removePrefixBtn);
+            prefixPanel.Controls.Add(_prefixesList, 0, 0);
+            prefixPanel.Controls.Add(prefixInputRow, 0, 1);
+            card.Controls.Add(prefixPanel, 1, row);
+            card.Controls.Add(new Label
+            {
+                Text = "Tout fichier dont le nom commence par l'un\nde ces prefixes est supprime avant le\ncomptage, dans chaque dossier de categorie.",
+                AutoSize = true, ForeColor = System.Drawing.Color.Gray, Margin = new Padding(3, 8, 0, 0)
+            }, 2, row);
+            row++;
+
+            AddLabel(card, "Conservation des archives\n(0 = jamais nettoyer automatiquement) :", row);
+            var retentionPanel = new FlowLayoutPanel { AutoSize = true };
+            _retentionDaysBox = new NumericUpDown { Minimum = 0, Maximum = 3650, Width = 90, Font = Theme.FontBase };
+            retentionPanel.Controls.Add(_retentionDaysBox);
+            retentionPanel.Controls.Add(new Label { Text = "jours", AutoSize = true, Margin = new Padding(8, 8, 0, 0) });
+            card.Controls.Add(retentionPanel, 1, row);
+            card.Controls.Add(new Label
+            {
+                Text = "Utilise par le bouton \"Nettoyer les anciennes\narchives\" dans l'onglet Historique.",
+                AutoSize = true, ForeColor = System.Drawing.Color.Gray, Margin = new Padding(3, 8, 0, 0)
+            }, 2, row);
+            row++;
+
             AddLabel(card, "Tentatives de mot de passe\nautorisees avant blocage :", row);
             _maxAttemptsBox = new NumericUpDown { Minimum = 1, Maximum = 20, Width = 80, Font = Theme.FontBase };
             card.Controls.Add(_maxAttemptsBox, 1, row);
@@ -124,6 +166,32 @@ namespace PhotoStudioApp.UI
             panel.Controls.Add(new Label { Text = text, AutoSize = true, Font = Theme.FontSubheading, Margin = new Padding(0, 8, 10, 0) }, 0, row);
         }
 
+        private void AddPrefixBtn_Click(object sender, EventArgs e)
+        {
+            string prefix = _newPrefixBox.Text.Trim();
+            if (string.IsNullOrEmpty(prefix))
+                return;
+
+            foreach (var existing in _prefixesList.Items)
+            {
+                if (string.Equals(existing.ToString(), prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    MessageBox.Show("Ce prefixe est deja dans la liste.", "Deja present", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+            }
+
+            _prefixesList.Items.Add(prefix);
+            _newPrefixBox.Clear();
+            _newPrefixBox.Focus();
+        }
+
+        private void RemovePrefixBtn_Click(object sender, EventArgs e)
+        {
+            if (_prefixesList.SelectedIndex >= 0)
+                _prefixesList.Items.RemoveAt(_prefixesList.SelectedIndex);
+        }
+
         private void BrowseFolder(TextBox target)
         {
             using (var dlg = new FolderBrowserDialog())
@@ -149,6 +217,12 @@ namespace PhotoStudioApp.UI
                 var dow = FrenchWeekdays[i].Value;
                 _closedDaysList.SetItemChecked(i, closed.Contains(dow));
             }
+
+            _prefixesList.Items.Clear();
+            foreach (var p in (s.PurgedFilePrefixesCsv ?? "").Split(',').Select(x => x.Trim()).Where(x => x.Length > 0))
+                _prefixesList.Items.Add(p);
+
+            _retentionDaysBox.Value = Math.Max(0, Math.Min(3650, s.ArchiveRetentionDays));
 
             _passwordStatusLabel.Text = string.IsNullOrEmpty(s.PasswordHash) ? "Non defini" : "Mot de passe defini";
             _passwordStatusLabel.ForeColor = string.IsNullOrEmpty(s.PasswordHash) ? Theme.Warning : Theme.Success;
@@ -199,6 +273,9 @@ namespace PhotoStudioApp.UI
 
             var checkedDays = _closedDaysList.CheckedIndices.Cast<int>().Select(i => FrenchWeekdays[i].Value);
             s.ClosedWeekdaysCsv = WorkdayCalculator.ToCsv(checkedDays);
+
+            s.PurgedFilePrefixesCsv = string.Join(",", _prefixesList.Items.Cast<object>().Select(o => o.ToString()));
+            s.ArchiveRetentionDays = (int)_retentionDaysBox.Value;
 
             try
             {

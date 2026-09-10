@@ -21,6 +21,12 @@ namespace PhotoStudioApp.Models
         /// <summary>Current logical work date ("today"), yyyy-MM-dd. Advances only on Close Day.</summary>
         public string CurrentWorkDate { get; set; }
         public int MaxPasswordAttempts { get; set; } = 5;
+        /// <summary>Comma-separated filename prefixes purged from each category folder before
+        /// counting/moving anything at close time (case-insensitive), e.g. "re,GSW".</summary>
+        public string PurgedFilePrefixesCsv { get; set; } = "re,GSW";
+        /// <summary>Archived days older than this are eligible for the "Nettoyer les anciennes
+        /// archives" action in History. 0 means the feature is off (nothing is ever auto-flagged).</summary>
+        public int ArchiveRetentionDays { get; set; } = 0;
 
         public static readonly List<string> AllWeekdayNames = new List<string>
         {

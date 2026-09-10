@@ -145,6 +145,8 @@ namespace PhotoStudioApp.UI
                 if (abs != null && !Directory.Exists(abs))
                 {
                     _categoryGrid.Rows[rowIdx].DefaultCellStyle.ForeColor = Theme.Warning;
+                    _categoryGrid.Rows[rowIdx].DefaultCellStyle.SelectionForeColor = Theme.Warning;
+                    _categoryGrid.Rows[rowIdx].DefaultCellStyle.SelectionBackColor = Theme.WarningBackground;
                     _categoryGrid.Rows[rowIdx].Cells[0].ToolTipText = "Dossier introuvable sur le disque";
                 }
             }

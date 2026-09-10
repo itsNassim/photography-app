@@ -79,6 +79,7 @@
     <Compile Include="Services\ReportPrintService.cs" />
     <Compile Include="Services\WorkdayCalculator.cs" />
     <Compile Include="Services\AppCulture.cs" />
+    <Compile Include="Services\ArchiveCleanupService.cs" />
     <Compile Include="UI\Theme.cs" />
     <Compile Include="UI\AuthGate.cs" />
     <Compile Include="UI\MainForm.cs" />
@@ -92,6 +93,7 @@
     <Compile Include="UI\Dialogs\AddCustomChargeDialog.cs" />
     <Compile Include="UI\Dialogs\PasswordPromptDialog.cs" />
     <Compile Include="UI\Dialogs\SetPasswordDialog.cs" />
+    <Compile Include="UI\Dialogs\TypeToConfirmDialog.cs" />
     <Compile Include="UI\Dialogs\BreakdownReportForm.cs" />
   </ItemGroup>
   <ItemGroup>
