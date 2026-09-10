@@ -29,10 +29,21 @@
          turned out not to reliably take effect before the build step runs. Instead, this
          points at the officially Microsoft-published Microsoft.NETFramework.ReferenceAssemblies.net46
          NuGet package (downloaded the same direct way as the SQLite package above - see
-         PhotoStudioApp.csproj's Import near the bottom, and .github/workflows/build.yml),
-         which ships the actual v4.6 reference assemblies as package content - no system-wide
-         install needed at all. -->
+         .github/workflows/build.yml and build/publish.ps1), which ships the actual v4.6
+         reference assemblies as package content - no system-wide install needed at all. The
+         properties below (TargetFrameworkRootPath etc.) are set directly from it further down. -->
     <NetFx46RefAssembliesPackageDir>..\packages\Microsoft.NETFramework.ReferenceAssemblies.net46.1.0.3\</NetFx46RefAssembliesPackageDir>
+    <!-- Set directly and UNCONDITIONALLY, rather than by importing the vendor package's own
+         .targets file (which gates on "$(TargetFrameworkIdentifier) == '.NETFramework'" -
+         that property is not guaranteed to already be resolved to that value at plain
+         top-level PropertyGroup evaluation time in a classic non-SDK .csproj like this one,
+         so that condition can silently fail to match - which is exactly what happened when
+         this was first tried as an Import: it did not fix the MSB3644 error). Setting these
+         properties unconditionally is safe here since this project only ever targets v4.6,
+         single-TFM, always. -->
+    <TargetFrameworkRootPath>$(NetFx46RefAssembliesPackageDir)build\</TargetFrameworkRootPath>
+    <EnableFrameworkPathOverride>false</EnableFrameworkPathOverride>
+    <NoStdLib>true</NoStdLib>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
     <PlatformTarget>x86</PlatformTarget>
@@ -54,6 +65,12 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Explicit mscorlib reference is REQUIRED because NoStdLib=true above disables MSBuild's
+         normal implicit mscorlib reference (which would otherwise come from FrameworkPathOverride -
+         a value that isn't reliable here, hence NoStdLib in the first place). No HintPath needed:
+         standard assembly resolution searches $(TargetFrameworkDirectory), which is now correctly
+         computed from TargetFrameworkRootPath above, pointing into the downloaded NuGet package. -->
+    <Reference Include="mscorlib" />
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Data" />
@@ -118,18 +135,22 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 
-  <!-- MUST come before the standard Reference resolution runs (GetReferenceAssemblyPaths is
-       part of the ResolveReferences pipeline pulled in by Microsoft.CSharp.targets above, but
-       MSBuild fully evaluates properties/items from ALL imports before executing any target -
-       so being textually after the import above is fine, and matches exactly how NuGet itself
-       auto-adds this kind of import for packages.config-style projects). Sets
-       TargetFrameworkRootPath so GetReferenceAssemblyPaths finds v4.6 reference assemblies
-       inside the NuGet package instead of needing them installed system-wide. See
-       NetFx46RefAssembliesPackageDir above for why this exists. -->
-  <Import Project="$(NetFx46RefAssembliesPackageDir)build\Microsoft.NETFramework.ReferenceAssemblies.net46.targets" Condition="Exists('$(NetFx46RefAssembliesPackageDir)build\Microsoft.NETFramework.ReferenceAssemblies.net46.targets')" />
-
   <!-- Best-effort: the Stub package's own build target, if MSBuild honors it. -->
   <Import Project="$(SQLiteStubPackageDir)Stub.System.Data.SQLite.Core.NetFramework.targets" Condition="Exists('$(SQLiteStubPackageDir)Stub.System.Data.SQLite.Core.NetFramework.targets')" />
+
+  <!-- Diagnostic only - prints what the .NET 4.6 reference-assemblies override actually
+       resolved to, right before GetReferenceAssemblyPaths runs. If MSB3644 ever reappears,
+       this shows in the build log exactly which path was checked and whether it existed,
+       instead of having to guess blind again. Importance="high" so it shows even without -v. -->
+  <Target Name="DiagnoseNetFx46RefAssemblies" BeforeTargets="GetReferenceAssemblyPaths">
+    <PropertyGroup>
+      <_NetFx46ResolvedRefDir>$(TargetFrameworkRootPath).NETFramework\v4.6\</_NetFx46ResolvedRefDir>
+    </PropertyGroup>
+    <Message Importance="high" Text="[diag] NetFx46RefAssembliesPackageDir = $(NetFx46RefAssembliesPackageDir)" />
+    <Message Importance="high" Text="[diag] TargetFrameworkRootPath        = $(TargetFrameworkRootPath)" />
+    <Message Importance="high" Text="[diag] Resolved ref assemblies dir    = $(_NetFx46ResolvedRefDir)" />
+    <Message Importance="high" Text="[diag] That directory exists on disk  = $([System.IO.Directory]::Exists('$(_NetFx46ResolvedRefDir)'))" />
+  </Target>
 
   <!-- Guaranteed fallback: this package's own copy-to-output target is known to be flaky
        in headless/CI builds (silently skips copying SQLite.Interop.dll in some MSBuild
