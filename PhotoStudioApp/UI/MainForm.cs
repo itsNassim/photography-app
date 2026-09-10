@@ -54,10 +54,12 @@ namespace PhotoStudioApp.UI
             _settingsTab = new SettingsTab { Dock = DockStyle.Fill };
 
             // Cross-tab refresh wiring: changing prices/categories or settings should refresh Home.
-            _categoriesTab.CategoriesChanged += (s, e) => _homeTab.RefreshAll();
+            // Category and studio-path changes also need the real-time folder watchers rebuilt,
+            // since they watch specific absolute folder paths that may no longer be valid.
+            _categoriesTab.CategoriesChanged += (s, e) => { _homeTab.RefreshAll(); _homeTab.SetupFolderWatchers(); };
             _stockTab.StockChanged += (s, e) => _homeTab.RefreshCustomChargeStockOptions();
-            _settingsTab.SettingsSaved += (s, e) => _homeTab.RefreshAll();
-            _homeTab.DayClosed += (s, e) => _historyTab.RefreshAll();
+            _settingsTab.SettingsSaved += (s, e) => { _homeTab.RefreshAll(); _homeTab.SetupFolderWatchers(); };
+            _homeTab.DayClosed += (s, e) => { _historyTab.RefreshAll(); _homeTab.SetupFolderWatchers(); };
 
             homeTabPage.Controls.Add(_homeTab);
             stockTabPage.Controls.Add(_stockTab);
@@ -71,13 +73,21 @@ namespace PhotoStudioApp.UI
             _tabs.TabPages.Add(historyTabPage);
             _tabs.TabPages.Add(settingsTabPage);
 
+            TabPage previousTab = null;
             _tabs.SelectedIndexChanged += (s, e) =>
             {
+                // Re-lock History the moment the user navigates away from it, so it always
+                // needs the password again next time - it never stays unlocked for the session.
+                if (previousTab == historyTabPage && _tabs.SelectedTab != historyTabPage)
+                    _historyTab.Lock();
+
                 if (_tabs.SelectedTab == homeTabPage) _homeTab.RefreshAll();
                 else if (_tabs.SelectedTab == stockTabPage) _stockTab.RefreshAll();
                 else if (_tabs.SelectedTab == categoriesTabPage) _categoriesTab.RefreshAll();
                 else if (_tabs.SelectedTab == historyTabPage) _historyTab.RefreshAll();
                 else if (_tabs.SelectedTab == settingsTabPage) _settingsTab.RefreshAll();
+
+                previousTab = _tabs.SelectedTab;
             };
 
             Controls.Add(_tabs);

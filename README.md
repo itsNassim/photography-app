@@ -8,7 +8,7 @@ Runs on **Windows 7 SP1 and above** (32-bit and 64-bit).
 
 ## Tech stack (and why)
 
-- **C# WinForms on .NET Framework 4.8** - the last Framework version, fully
+- **C# WinForms on .NET Framework 4.6** - the last Framework version, fully
   supported on Windows 7 SP1. Do **not** retarget this project to .NET 5/6/7/8/9 -
   those dropped Windows 7 support entirely.
 - **SQLite** via the `Stub.System.Data.SQLite.Core.NetFramework` NuGet package
@@ -68,7 +68,7 @@ build folder - if you'd rather xcopy-deploy instead of using the installer.)
 
 You need a **Windows machine** (or a Windows VM) with **Visual Studio 2019 or 2022**
 (Community edition is fine) and the **".NET desktop development"** workload
-installed - that workload includes the .NET Framework 4.8 targeting pack.
+installed - that workload includes the .NET Framework 4.6 targeting pack.
 
 1. Open `PhotoStudioApp.sln` in Visual Studio.
 2. This project restores its one NuGet dependency
@@ -82,7 +82,7 @@ installed - that workload includes the .NET Framework 4.8 targeting pack.
 4. Build → Rebuild Solution (Release).
 5. Your build is in `PhotoStudioApp\bin\Release\`. This whole folder is
    **portable** - zip it up or copy it directly to the target Windows 7 machine
-   and run `PhotoStudioApp.exe`. No installer or extra runtime needed (.NET 4.8
+   and run `PhotoStudioApp.exe`. No installer or extra runtime needed (.NET 4.6
    ships with, or is easily added to, any supported Windows 7 SP1 install).
 
 Alternatively, from a "Developer PowerShell for VS" prompt:

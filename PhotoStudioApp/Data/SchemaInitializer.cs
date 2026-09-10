@@ -81,7 +81,8 @@ namespace PhotoStudioApp.Data
                         CategoryId     INTEGER,
                         CategoryName   TEXT NOT NULL,
                         Count          INTEGER NOT NULL,
-                        UnitPrice      REAL NOT NULL
+                        UnitPrice      REAL NOT NULL,
+                        PurgedCount    INTEGER NOT NULL DEFAULT 0
                     );");
 
                 Exec(conn, @"
@@ -100,6 +101,7 @@ namespace PhotoStudioApp.Data
             // add columns to an already-existing table, so do that here if needed.
             AddColumnIfMissing("Categories", "HasFolder", "INTEGER NOT NULL DEFAULT 1");
             AddColumnIfMissing("CustomCharges", "LinkedCategoryId", "INTEGER REFERENCES Categories(Id)");
+            AddColumnIfMissing("DailyCloseLineItems", "PurgedCount", "INTEGER NOT NULL DEFAULT 0");
 
             // Older databases created Categories.FolderRelativePath as NOT NULL, back when
             // every category had a folder. SQLite can't just drop a NOT NULL constraint with

@@ -23,18 +23,20 @@ namespace PhotoStudioApp.UI.Dialogs
 
         private readonly TextBox _descBox;
         private readonly NumericUpDown _amountBox;
+        private readonly TextBox _searchBox;
         private readonly ComboBox _linkCombo;
         private readonly NumericUpDown _qtyBox;
         private readonly CheckBox _autoAmountCheck;
         private readonly StockRepository _stockRepo = new StockRepository();
         private readonly CategoryRepository _categoryRepo = new CategoryRepository();
+        private List<LinkOption> _allOptions = new List<LinkOption>();
         private bool _restoringExisting;
 
         public AddCustomChargeDialog(CustomCharge existing = null)
         {
             Text = existing == null ? "Ajouter une charge additionnelle" : "Modifier la charge additionnelle";
             Width = 480;
-            Height = 400;
+            Height = 430;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             StartPosition = FormStartPosition.CenterParent;
             MaximizeBox = false;
@@ -42,34 +44,37 @@ namespace PhotoStudioApp.UI.Dialogs
             Font = Theme.FontBase;
             BackColor = Theme.CardBackground;
 
-            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(20), RowCount = 7 };
+            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(20), RowCount = 8 };
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
-            layout.Controls.Add(new Label { Text = "Categorie ou article de stock\n(optionnel) :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 0);
+            layout.Controls.Add(new Label { Text = "Rechercher (nom ou\ncategorie) :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 0);
+            _searchBox = new TextBox { Width = 270 };
+            _searchBox.TextChanged += (s, e) => ApplySearchFilter();
+            layout.Controls.Add(_searchBox, 1, 0);
+
+            layout.Controls.Add(new Label { Text = "Categorie ou article de stock\n(optionnel) :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 1);
             _linkCombo = new ComboBox { Width = 270, DropDownStyle = ComboBoxStyle.DropDownList };
-            BuildLinkOptions();
-            _linkCombo.SelectedIndex = 0;
-            _linkCombo.SelectedIndexChanged += LinkCombo_SelectedIndexChanged;
-            layout.Controls.Add(_linkCombo, 1, 0);
+            BuildLinkOptions(); // also wires SelectedIndexChanged and selects index 0 via RepopulateCombo
+            layout.Controls.Add(_linkCombo, 1, 1);
 
-            layout.Controls.Add(new Label { Text = "Description :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 1);
+            layout.Controls.Add(new Label { Text = "Description :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 2);
             _descBox = new TextBox { Width = 270, Text = existing?.Description ?? "" };
-            layout.Controls.Add(_descBox, 1, 1);
+            layout.Controls.Add(_descBox, 1, 2);
 
-            layout.Controls.Add(new Label { Text = "Quantite :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 2);
+            layout.Controls.Add(new Label { Text = "Quantite :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 3);
             _qtyBox = new NumericUpDown { Width = 100, Minimum = 0, Maximum = 100000, Enabled = false, Value = existing?.Quantity ?? 0 };
             _qtyBox.ValueChanged += (s, e) => RecomputeAutoAmount();
-            layout.Controls.Add(_qtyBox, 1, 2);
+            layout.Controls.Add(_qtyBox, 1, 3);
 
-            layout.Controls.Add(new Label { Text = "Utiliser le prix du lien\npour le montant :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 3);
+            layout.Controls.Add(new Label { Text = "Utiliser le prix du lien\npour le montant :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 4);
             _autoAmountCheck = new CheckBox { Checked = existing == null, Enabled = false };
             _autoAmountCheck.CheckedChanged += (s, e) => RecomputeAutoAmount();
-            layout.Controls.Add(_autoAmountCheck, 1, 3);
+            layout.Controls.Add(_autoAmountCheck, 1, 4);
 
-            layout.Controls.Add(new Label { Text = "Montant :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 4);
+            layout.Controls.Add(new Label { Text = "Montant :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 5);
             _amountBox = new NumericUpDown { Width = 120, Minimum = 0, Maximum = 1000000, DecimalPlaces = 2, Value = existing?.Amount ?? 0 };
-            layout.Controls.Add(_amountBox, 1, 4);
+            layout.Controls.Add(_amountBox, 1, 5);
 
             var btnPanel = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Dock = DockStyle.Fill };
             var okBtn = Theme.MakePrimaryButton("Enregistrer");
@@ -80,7 +85,7 @@ namespace PhotoStudioApp.UI.Dialogs
             cancelBtn.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
             btnPanel.Controls.Add(okBtn);
             btnPanel.Controls.Add(cancelBtn);
-            layout.Controls.Add(btnPanel, 1, 6);
+            layout.Controls.Add(btnPanel, 1, 7);
 
             Controls.Add(layout);
             AcceptButton = okBtn;
@@ -123,21 +128,77 @@ namespace PhotoStudioApp.UI.Dialogs
 
         private void BuildLinkOptions()
         {
-            _linkCombo.Items.Add(new LinkOption { Label = "(aucun - saisie manuelle)" });
+            _allOptions = new List<LinkOption> { new LinkOption { Label = "(aucun - saisie manuelle)" } };
 
             var stockItems = _stockRepo.GetAll(activeOnly: true);
             foreach (var item in stockItems)
             {
-                string label = "[Stock] " + item.Name + (item.IsOutOfStock ? "  (RUPTURE DE STOCK)" : $"  (qte : {item.Quantity})");
-                _linkCombo.Items.Add(new LinkOption { Label = label, Stock = item });
+                string statusSuffix = item.IsOutOfStock
+                    ? "RUPTURE DE STOCK"
+                    : item.IsLowStock
+                        ? "STOCK FAIBLE"
+                        : $"qte : {item.Quantity}";
+                string categoryPart = string.IsNullOrWhiteSpace(item.Category) ? "" : $"  [{item.Category}]";
+                string label = $"[Stock] {item.Name}{categoryPart}  ({statusSuffix})";
+                _allOptions.Add(new LinkOption { Label = label, Stock = item });
             }
 
             var serviceCategories = _categoryRepo.GetActiveServiceCategories();
             foreach (var cat in serviceCategories)
             {
                 string label = $"[Categorie] {cat.Name}  ({cat.CurrentPrice:0.00} / unite)";
-                _linkCombo.Items.Add(new LinkOption { Label = label, ServiceCategory = cat });
+                _allOptions.Add(new LinkOption { Label = label, ServiceCategory = cat });
             }
+
+            RepopulateCombo(_allOptions);
+        }
+
+        /// <summary>Filters the dropdown live as the user types in the search box, by item/stock
+        /// name, by category name, or by service-category name - makes finding the right
+        /// category quick even when there are many stock items/categories to scroll through.</summary>
+        private void ApplySearchFilter()
+        {
+            string term = _searchBox.Text?.Trim() ?? "";
+            if (term.Length == 0)
+            {
+                RepopulateCombo(_allOptions);
+                return;
+            }
+
+            var filtered = new List<LinkOption> { _allOptions[0] }; // always keep "(aucun...)"
+            foreach (var o in _allOptions.Skip(1))
+            {
+                bool matches =
+                    (o.Stock != null && (
+                        o.Stock.Name.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        (o.Stock.Category ?? "").IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0)) ||
+                    (o.ServiceCategory != null &&
+                        o.ServiceCategory.Name.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0);
+                if (matches)
+                    filtered.Add(o);
+            }
+            RepopulateCombo(filtered);
+        }
+
+        private void RepopulateCombo(List<LinkOption> options)
+        {
+            var previouslySelected = SelectedOption();
+            _linkCombo.SelectedIndexChanged -= LinkCombo_SelectedIndexChanged;
+            _linkCombo.Items.Clear();
+            foreach (var o in options)
+                _linkCombo.Items.Add(o);
+
+            int idx = 0;
+            if (previouslySelected != null)
+            {
+                for (int i = 0; i < options.Count; i++)
+                {
+                    if (ReferenceEquals(options[i], previouslySelected)) { idx = i; break; }
+                }
+            }
+            _linkCombo.SelectedIndexChanged += LinkCombo_SelectedIndexChanged;
+            if (_linkCombo.Items.Count > 0)
+                _linkCombo.SelectedIndex = idx;
         }
 
         private LinkOption SelectedOption() => _linkCombo.SelectedItem as LinkOption;

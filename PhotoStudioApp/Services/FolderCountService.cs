@@ -32,25 +32,32 @@ namespace PhotoStudioApp.Services
         /// <summary>Deletes any file directly inside the folder whose name starts with one of
         /// the given prefixes (case-insensitive) - used to purge rejects/duplicates (e.g. "re...",
         /// "GSW...") from a category folder BEFORE counting or moving anything at close time.
-        /// Returns the number of files deleted. Does nothing (returns 0) if the folder doesn't exist.</summary>
+        /// Every matching file is first CALCULATED (tallied into a fixed list) and only THEN
+        /// deleted - never deleted opportunistically while still being enumerated - so the
+        /// returned count is always an accurate tally of what was purged, never a guess made
+        /// after the fact. Returns the number of files deleted (0 if the folder doesn't exist or
+        /// nothing matches).</summary>
         public int DeleteFilesWithPrefixes(string absoluteFolderPath, params string[] prefixes)
         {
             if (!Directory.Exists(absoluteFolderPath) || prefixes == null || prefixes.Length == 0)
                 return 0;
 
-            int deleted = 0;
-            foreach (var file in Directory.EnumerateFiles(absoluteFolderPath).ToList())
-            {
-                string name = Path.GetFileName(file);
-                bool matches = prefixes.Any(p => !string.IsNullOrEmpty(p) &&
-                    name.StartsWith(p, StringComparison.OrdinalIgnoreCase));
-                if (matches)
+            // 1) Calculate first: find and count every matching file up front, as a stable
+            //    snapshot, before deleting anything.
+            var matchingFiles = Directory.EnumerateFiles(absoluteFolderPath)
+                .Where(file =>
                 {
-                    File.Delete(file);
-                    deleted++;
-                }
-            }
-            return deleted;
+                    string name = Path.GetFileName(file);
+                    return prefixes.Any(p => !string.IsNullOrEmpty(p) &&
+                        name.StartsWith(p, StringComparison.OrdinalIgnoreCase));
+                })
+                .ToList();
+
+            // 2) Only now delete what was calculated above.
+            foreach (var file in matchingFiles)
+                File.Delete(file);
+
+            return matchingFiles.Count;
         }
 
         /// <summary>Moves every photo file from source into destination (creating destination if

@@ -8,8 +8,9 @@
     <OutputType>WinExe</OutputType>
     <RootNamespace>PhotoStudioApp</RootNamespace>
     <AssemblyName>PhotoStudioApp</AssemblyName>
-    <!-- IMPORTANT: keep at 4.8. Do NOT upgrade to .NET 5+/Core — those dropped Windows 7 support. -->
-    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <!-- IMPORTANT: keep at 4.6 (per project requirement). Do NOT upgrade to .NET 5+/Core —
+         those dropped Windows 7 support. -->
+    <TargetFrameworkVersion>v4.6</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>true</Deterministic>
@@ -81,6 +82,7 @@
     <Compile Include="Services\AppCulture.cs" />
     <Compile Include="Services\ArchiveCleanupService.cs" />
     <Compile Include="UI\Theme.cs" />
+    <Compile Include="UI\IconGlyphs.cs" />
     <Compile Include="UI\AuthGate.cs" />
     <Compile Include="UI\MainForm.cs" />
     <Compile Include="UI\HomeTab.cs" />
@@ -95,6 +97,7 @@
     <Compile Include="UI\Dialogs\SetPasswordDialog.cs" />
     <Compile Include="UI\Dialogs\TypeToConfirmDialog.cs" />
     <Compile Include="UI\Dialogs\BreakdownReportForm.cs" />
+    <Compile Include="UI\Dialogs\MonthSummaryReportForm.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

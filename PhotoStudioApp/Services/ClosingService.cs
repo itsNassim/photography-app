@@ -83,12 +83,16 @@ namespace PhotoStudioApp.Services
                         CategoryId = cat.Id,
                         CategoryName = cat.Name,
                         Count = 0,
-                        UnitPrice = cat.CurrentPrice
+                        UnitPrice = cat.CurrentPrice,
+                        PurgedCount = 0
                     });
                     continue;
                 }
 
-                _folders.DeleteFilesWithPrefixes(catAbs, purgedPrefixes);
+                // Rejects/duplicates (e.g. "re...", "GSW...") are calculated (counted) first,
+                // then deleted - the tally is kept below for the day's audit trail so nothing
+                // is ever silently discarded without being accounted for.
+                int purged = _folders.DeleteFilesWithPrefixes(catAbs, purgedPrefixes);
 
                 int count = _folders.CountPhotos(catAbs);
                 totalPhotosFound += count;
@@ -97,7 +101,8 @@ namespace PhotoStudioApp.Services
                     CategoryId = cat.Id,
                     CategoryName = cat.Name,
                     Count = count,
-                    UnitPrice = cat.CurrentPrice
+                    UnitPrice = cat.CurrentPrice,
+                    PurgedCount = purged
                 });
             }
 
@@ -170,6 +175,14 @@ namespace PhotoStudioApp.Services
             DateTime nextWorkDate = WorkdayCalculator.NextWorkDate(closeDateValue, closedWeekdays);
             settings.CurrentWorkDate = nextWorkDate.ToString("yyyy-MM-dd");
             _settingsRepo.SaveAll(settings);
+
+            // 7) Pre-create tomorrow's working folder in the studio root right now, using the
+            //    exact same date-format setting as today's - so it's ready and waiting in the
+            //    studio folder immediately after closing, instead of only appearing the next
+            //    time CloseDay() runs.
+            string nextWorkingFolderName = nextWorkDate.ToString(settings.DateFolderFormat, AppCulture.French);
+            string nextWorkingFolderAbs = Path.Combine(settings.StudioRootPath, nextWorkingFolderName);
+            _folders.EnsureFolderExists(nextWorkingFolderAbs);
 
             return close;
         }

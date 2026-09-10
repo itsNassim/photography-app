@@ -10,7 +10,7 @@
   Requirements on the BUILD machine (not the target Win7 machine):
     - Visual Studio 2019/2022 Build Tools (or full VS) with the
       ".NET desktop development" workload, which includes the
-      .NET Framework 4.8 targeting pack.
+      .NET Framework 4.6 targeting pack.
     - Internet access to nuget.org (this script downloads the
       System.Data.SQLite.Core package directly, deterministically -
       it does not rely on "nuget.exe restore").

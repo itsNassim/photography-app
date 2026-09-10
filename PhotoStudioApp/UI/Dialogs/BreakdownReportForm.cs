@@ -55,7 +55,10 @@ namespace PhotoStudioApp.UI.Dialogs
             var exportPdfBtn = Theme.MakeSecondaryButton("Exporter en PDF");
             exportPdfBtn.Width = 150;
             exportPdfBtn.Click += ExportPdfBtn_Click;
-            var printBtn = Theme.MakePrimaryButton("🖨 Imprimer");
+            var printBtn = Theme.MakePrimaryButton("Imprimer");
+            printBtn.Image = IconGlyphs.Printer(16);
+            printBtn.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            printBtn.TextImageRelation = TextImageRelation.ImageBeforeText;
             printBtn.Width = 130;
             printBtn.Click += PrintBtn_Click;
 
@@ -76,7 +79,11 @@ namespace PhotoStudioApp.UI.Dialogs
             sb.AppendLine(new string('-', 46));
 
             foreach (var li in _close.LineItems)
+            {
                 sb.AppendLine($"{li.CategoryName,-24} {li.Count,4} x {li.UnitPrice,8:0.00} = {li.Subtotal,10:0.00}");
+                if (li.PurgedCount > 0)
+                    sb.AppendLine($"  (dont {li.PurgedCount} fichier(s) rejete(s)/dupliques calcule(s) puis supprime(s))");
+            }
 
             if (_close.CustomCharges.Count > 0)
             {

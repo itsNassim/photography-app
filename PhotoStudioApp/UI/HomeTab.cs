@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Windows.Forms;
 using PhotoStudioApp.Data;
@@ -25,15 +26,33 @@ namespace PhotoStudioApp.UI
         private Label _dateLabel;
         private Timer _autoRefreshTimer;
 
+        // Real-time folder verification: a FileSystemWatcher per category folder fires the
+        // instant a file is added/removed/renamed, instead of waiting for the next poll tick.
+        // _watchDebounce coalesces bursts of events (e.g. copying 40 photos at once) into a
+        // single UI refresh a few hundred ms later, rather than refreshing 40 times in a row.
+        private readonly List<FileSystemWatcher> _folderWatchers = new List<FileSystemWatcher>();
+        private Timer _watchDebounce;
+
         public HomeTab()
         {
             BackColor = Theme.Background;
             BuildLayout();
             RefreshAll();
 
-            _autoRefreshTimer = new Timer { Interval = 10_000 }; // actualisation auto toutes les 10s
+            _watchDebounce = new Timer { Interval = 400 };
+            _watchDebounce.Tick += (s, e) =>
+            {
+                _watchDebounce.Stop();
+                RefreshCategoryCountsOnly();
+            };
+
+            // Kept as a safety-net poll (slower now that real-time watchers do the heavy
+            // lifting) - covers network-drive folders where FileSystemWatcher can be unreliable.
+            _autoRefreshTimer = new Timer { Interval = 15_000 };
             _autoRefreshTimer.Tick += (s, e) => RefreshCategoryCountsOnly();
             _autoRefreshTimer.Start();
+
+            SetupFolderWatchers();
         }
 
         private void BuildLayout()
@@ -53,7 +72,10 @@ namespace PhotoStudioApp.UI
             // --- En-tete : date + bouton actualiser ---
             var headerPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.LeftToRight };
             _dateLabel = new Label { Font = Theme.FontHeading, ForeColor = Theme.TextDark, AutoSize = true, Margin = new Padding(0, 0, 20, 10) };
-            var refreshBtn = Theme.MakeSecondaryButton("⟳ Actualiser");
+            var refreshBtn = Theme.MakeSecondaryButton("Actualiser");
+            refreshBtn.Image = IconGlyphs.Refresh(16);
+            refreshBtn.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            refreshBtn.TextImageRelation = TextImageRelation.ImageBeforeText;
             refreshBtn.Width = 130;
             refreshBtn.Click += (s, e) => RefreshAll();
             headerPanel.Controls.Add(_dateLabel);
@@ -106,7 +128,10 @@ namespace PhotoStudioApp.UI
 
             // --- Pied de page : bouton Cloturer la journee (pas d'apercu de total, sur demande) ---
             var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Margin = new Padding(0, 12, 0, 0) };
-            var closeDayBtn = Theme.MakePrimaryButton("🔒 Cloturer la journee");
+            var closeDayBtn = Theme.MakePrimaryButton("Cloturer la journee");
+            closeDayBtn.Image = IconGlyphs.Lock(18);
+            closeDayBtn.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            closeDayBtn.TextImageRelation = TextImageRelation.ImageBeforeText;
             closeDayBtn.Width = 240;
             closeDayBtn.Height = 46;
             closeDayBtn.Click += CloseDayBtn_Click;
@@ -169,6 +194,90 @@ namespace PhotoStudioApp.UI
         {
             // Point d'extension : le dialogue "Ajouter une charge" recharge le stock et les
             // categories a chaque ouverture, donc rien a mettre en cache ici.
+        }
+
+        /// <summary>(Re)creates one FileSystemWatcher per active folder-backed category so photo
+        /// counts update in real time (the instant a file is added/removed) instead of only on
+        /// the next timer tick. Called at startup and whenever categories or the studio root
+        /// path might have changed (see MainForm wiring).</summary>
+        public void SetupFolderWatchers()
+        {
+            foreach (var w in _folderWatchers)
+            {
+                w.EnableRaisingEvents = false;
+                w.Dispose();
+            }
+            _folderWatchers.Clear();
+
+            var settings = _settingsRepo.LoadAll();
+            if (string.IsNullOrWhiteSpace(settings.StudioRootPath))
+                return;
+
+            foreach (var cat in _categoryRepo.GetActiveFolderCategories())
+            {
+                string abs;
+                try { abs = Path.Combine(settings.StudioRootPath, cat.FolderRelativePath); }
+                catch { continue; }
+
+                if (!Directory.Exists(abs))
+                    continue;
+
+                try
+                {
+                    var watcher = new FileSystemWatcher(abs)
+                    {
+                        NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.DirectoryName,
+                        IncludeSubdirectories = false
+                    };
+                    watcher.Created += FolderWatcher_Changed;
+                    watcher.Deleted += FolderWatcher_Changed;
+                    watcher.Renamed += FolderWatcher_Changed;
+                    watcher.Changed += FolderWatcher_Changed;
+                    watcher.EnableRaisingEvents = true;
+                    _folderWatchers.Add(watcher);
+                }
+                catch
+                {
+                    // Best-effort - if a watcher can't be created for this folder (e.g. a
+                    // network path that doesn't support it), the 15s safety-net poll still
+                    // catches it eventually.
+                }
+            }
+        }
+
+        private void FolderWatcher_Changed(object sender, FileSystemEventArgs e)
+        {
+            // FileSystemWatcher events arrive on a background thread - marshal back to the UI
+            // thread and (re)start the debounce timer so a burst of events collapses into one
+            // refresh shortly after activity settles down.
+            if (IsDisposed) return;
+            try
+            {
+                BeginInvoke((Action)(() =>
+                {
+                    if (_watchDebounce == null) return;
+                    _watchDebounce.Stop();
+                    _watchDebounce.Start();
+                }));
+            }
+            catch (ObjectDisposedException) { /* form closing - ignore */ }
+            catch (InvalidOperationException) { /* handle not yet created - ignore */ }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                foreach (var w in _folderWatchers)
+                {
+                    w.EnableRaisingEvents = false;
+                    w.Dispose();
+                }
+                _folderWatchers.Clear();
+                _watchDebounce?.Dispose();
+                _autoRefreshTimer?.Dispose();
+            }
+            base.Dispose(disposing);
         }
 
         private void AddChargeBtn_Click(object sender, EventArgs e)

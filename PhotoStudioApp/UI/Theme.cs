@@ -36,11 +36,16 @@ namespace PhotoStudioApp.UI
         public static readonly Color LowStockSelectionBackColor = ColorTranslator.FromHtml("#FFC107"); // solid amber
         public static readonly Color LowStockSelectionForeColor = ColorTranslator.FromHtml("#3D2E00");
 
+        // NOTE: "Segoe UI Semibold" is a SEPARATE font family only shipped from Windows 8
+        // onwards. On Windows 7, requesting it by name silently falls back to a generic default
+        // font (wrong size/metrics), which is what caused headings, buttons, and grid headers to
+        // look wrong there. "Segoe UI" (a real family on Windows 7 SP1+) with FontStyle.Bold
+        // gives the same bold look and renders correctly on every supported Windows version.
         public static readonly Font FontBase = new Font("Segoe UI", 9.5f);
-        public static readonly Font FontHeading = new Font("Segoe UI Semibold", 15f, FontStyle.Bold);
-        public static readonly Font FontSubheading = new Font("Segoe UI Semibold", 11f, FontStyle.Bold);
+        public static readonly Font FontHeading = new Font("Segoe UI", 15f, FontStyle.Bold);
+        public static readonly Font FontSubheading = new Font("Segoe UI", 11f, FontStyle.Bold);
         public static readonly Font FontTotal = new Font("Segoe UI", 20f, FontStyle.Bold);
-        public static readonly Font FontButton = new Font("Segoe UI Semibold", 10f, FontStyle.Bold);
+        public static readonly Font FontButton = new Font("Segoe UI", 10f, FontStyle.Bold);
 
         public static Button MakePrimaryButton(string text)
         {
@@ -95,6 +100,23 @@ namespace PhotoStudioApp.UI
 
         public static void StyleGrid(DataGridView grid)
         {
+            // DataGridView's DoubleBuffered property is protected, so it defaults to off. On
+            // Windows 7 (no DWM composition backing every window the way Windows 8+ does) this
+            // shows up as visible flicker/partial-repaint artifacts when row colors change (e.g.
+            // the low-stock/out-of-stock coloring below) - turning it on via reflection fixes
+            // that rendering glitch without needing a custom DataGridView subclass.
+            try
+            {
+                typeof(DataGridView).InvokeMember("DoubleBuffered",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.SetProperty,
+                    null, grid, new object[] { true });
+            }
+            catch
+            {
+                // Best-effort only - if reflection is ever blocked (e.g. restrictive CAS policy),
+                // the grid still works, just without this extra smoothness.
+            }
+
             grid.BackgroundColor = CardBackground;
             grid.BorderStyle = BorderStyle.None;
             grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;

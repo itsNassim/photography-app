@@ -44,7 +44,23 @@ namespace PhotoStudioApp.UI
 
         private void BuildLayout()
         {
-            var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, Padding = new Padding(16), AutoScroll = true };
+            // Scrolling fix: a TableLayoutPanel that is BOTH Dock=Fill AND AutoScroll=true can't
+            // compute a scrollable content size correctly - Dock=Fill clamps it to the visible
+            // client area, so content taller than the window gets clipped instead of scrolled
+            // (this is what cut off the bottom of the Parametres page). The fix is to separate
+            // the two roles: an outer Panel does the scrolling (Dock=Fill, AutoScroll=true), and
+            // the actual content is a TableLayoutPanel that AutoSizes to its real full height and
+            // docks to Top (so it only takes the width of the scroll panel, not a fixed fill).
+            var scrollPanel = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = Theme.Background };
+
+            var root = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                ColumnCount = 1,
+                Padding = new Padding(16),
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink
+            };
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
             var title = new Label { Text = "Parametres", Font = Theme.FontHeading, AutoSize = true, Margin = new Padding(0, 0, 0, 14) };
@@ -150,15 +166,18 @@ namespace PhotoStudioApp.UI
             card.Controls.Add(pwdPanel, 1, row);
             row++;
 
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.Controls.Add(card);
 
             var saveBtn = Theme.MakePrimaryButton("Enregistrer les parametres");
             saveBtn.Width = 220;
-            saveBtn.Margin = new Padding(0, 16, 0, 0);
+            saveBtn.Margin = new Padding(0, 16, 0, 24);
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             saveBtn.Click += SaveBtn_Click;
             root.Controls.Add(saveBtn);
 
-            Controls.Add(root);
+            scrollPanel.Controls.Add(root);
+            Controls.Add(scrollPanel);
         }
 
         private void AddLabel(TableLayoutPanel panel, string text, int row)

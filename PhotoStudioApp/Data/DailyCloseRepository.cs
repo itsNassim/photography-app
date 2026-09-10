@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data.SQLite;
 using PhotoStudioApp.Models;
+using PhotoStudioApp.Services;
 
 namespace PhotoStudioApp.Data
 {
@@ -27,14 +28,15 @@ namespace PhotoStudioApp.Data
             foreach (var li in close.LineItems)
             {
                 using (var cmd = new SQLiteCommand(@"
-                    INSERT INTO DailyCloseLineItems (DailyCloseId, CategoryId, CategoryName, Count, UnitPrice)
-                    VALUES (@cid, @catId, @catName, @count, @price);", conn, tx))
+                    INSERT INTO DailyCloseLineItems (DailyCloseId, CategoryId, CategoryName, Count, UnitPrice, PurgedCount)
+                    VALUES (@cid, @catId, @catName, @count, @price, @purged);", conn, tx))
                 {
                     cmd.Parameters.AddWithValue("@cid", closeId);
                     cmd.Parameters.AddWithValue("@catId", li.CategoryId);
                     cmd.Parameters.AddWithValue("@catName", li.CategoryName);
                     cmd.Parameters.AddWithValue("@count", li.Count);
                     cmd.Parameters.AddWithValue("@price", li.UnitPrice);
+                    cmd.Parameters.AddWithValue("@purged", li.PurgedCount);
                     cmd.ExecuteNonQuery();
                 }
             }
@@ -105,7 +107,7 @@ namespace PhotoStudioApp.Data
                 }
 
                 using (var cmd = new SQLiteCommand(@"
-                    SELECT CategoryId, CategoryName, Count, UnitPrice
+                    SELECT CategoryId, CategoryName, Count, UnitPrice, PurgedCount
                     FROM DailyCloseLineItems WHERE DailyCloseId=@id;", conn))
                 {
                     cmd.Parameters.AddWithValue("@id", id);
@@ -118,7 +120,8 @@ namespace PhotoStudioApp.Data
                                 CategoryId = r.IsDBNull(0) ? 0 : r.GetInt32(0),
                                 CategoryName = r.GetString(1),
                                 Count = r.GetInt32(2),
-                                UnitPrice = Convert.ToDecimal(r.GetDouble(3))
+                                UnitPrice = Convert.ToDecimal(r.GetDouble(3)),
+                                PurgedCount = r.IsDBNull(4) ? 0 : r.GetInt32(4)
                             });
                         }
                     }
@@ -142,6 +145,72 @@ namespace PhotoStudioApp.Data
                 }
             }
             return close;
+        }
+
+        /// <summary>Aggregates every closed day by calendar month (year+month of CloseDate),
+        /// most recent month first - powers the "Resume mensuel" sub-tab.</summary>
+        public List<MonthSummary> GetMonthlySummaries()
+        {
+            var list = new List<MonthSummary>();
+            using (var conn = Db.OpenConnection())
+            using (var cmd = new SQLiteCommand(@"
+                SELECT substr(CloseDate, 1, 7) AS YearMonth, COUNT(*), SUM(GrandTotal)
+                FROM DailyCloses
+                GROUP BY YearMonth
+                ORDER BY YearMonth DESC;", conn))
+            using (var r = cmd.ExecuteReader())
+            {
+                while (r.Read())
+                {
+                    string yearMonth = r.GetString(0);
+                    DateTime firstOfMonth;
+                    string label = yearMonth;
+                    if (DateTime.TryParseExact(yearMonth + "-01", "yyyy-MM-dd", null,
+                        System.Globalization.DateTimeStyles.None, out firstOfMonth))
+                        label = firstOfMonth.ToString("MMMM yyyy", AppCulture.French);
+
+                    list.Add(new MonthSummary
+                    {
+                        YearMonth = yearMonth,
+                        MonthLabel = label,
+                        DaysClosed = r.GetInt32(1),
+                        TotalRevenue = Convert.ToDecimal(r.GetDouble(2))
+                    });
+                }
+            }
+            return list;
+        }
+
+        /// <summary>Every closed day (basic fields only - date/total/archive path, no line
+        /// items) whose CloseDate falls within the given "yyyy-MM" month, oldest first - used to
+        /// print the day-by-day breakdown under a month's summary report.</summary>
+        public List<DailyClose> GetClosesForMonth(string yearMonth)
+        {
+            var list = new List<DailyClose>();
+            using (var conn = Db.OpenConnection())
+            using (var cmd = new SQLiteCommand(@"
+                SELECT Id, CloseDate, ArchiveFolderPath, ClosedAt, GrandTotal
+                FROM DailyCloses
+                WHERE substr(CloseDate, 1, 7) = @ym
+                ORDER BY CloseDate ASC;", conn))
+            {
+                cmd.Parameters.AddWithValue("@ym", yearMonth);
+                using (var r = cmd.ExecuteReader())
+                {
+                    while (r.Read())
+                    {
+                        list.Add(new DailyClose
+                        {
+                            Id = r.GetInt32(0),
+                            CloseDate = r.GetString(1),
+                            ArchiveFolderPath = r.GetString(2),
+                            ClosedAt = DateTime.Parse(r.GetString(3)),
+                            GrandTotal = Convert.ToDecimal(r.GetDouble(4))
+                        });
+                    }
+                }
+            }
+            return list;
         }
 
         /// <summary>Deletes one closed day's DB record (and its line items / custom charges).

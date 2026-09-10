@@ -25,22 +25,48 @@ namespace PhotoStudioApp.Services
             return _closeRepo.GetHistory().Where(c => c.ClosedAt < cutoff).ToList();
         }
 
-        /// <summary>Deletes one closed day: its archive folder on disk (if it still exists) and
-        /// its database record.</summary>
-        public void DeleteSingle(DailyClose close)
+        /// <summary>Deletes one closed day's database record (removing it - and its revenue -
+        /// from the History count/list). By default the archive folder on disk is left alone:
+        /// the History "Supprimer" button only removes the entry from the count/history, it does
+        /// NOT touch the actual archived photos. Pass deleteFolder=true for callers that
+        /// genuinely want to reclaim disk space too (retention cleanup, "tout supprimer",
+        /// "garder ce mois uniquement").</summary>
+        public void DeleteSingle(DailyClose close, bool deleteFolder = false)
         {
-            TryDeleteFolder(close.ArchiveFolderPath);
+            if (deleteFolder)
+                TryDeleteFolder(close.ArchiveFolderPath);
             _closeRepo.DeleteClose(close.Id);
         }
 
-        /// <summary>Runs DeleteSingle for every closed day older than the configured retention
-        /// setting. Returns how many were deleted.</summary>
+        /// <summary>Runs DeleteSingle (with the archive folder actually removed, to reclaim disk
+        /// space) for every closed day older than the configured retention setting. Returns how
+        /// many were deleted.</summary>
         public int CleanupOlderThanConfiguredRetention()
         {
             var settings = _settingsRepo.LoadAll();
             var toDelete = FindClosesOlderThan(settings.ArchiveRetentionDays);
             foreach (var close in toDelete)
-                DeleteSingle(close);
+                DeleteSingle(close, deleteFolder: true);
+            return toDelete.Count;
+        }
+
+        /// <summary>Closed days whose CloseDate falls outside the current calendar month
+        /// (year+month different from today's). Used by "garder uniquement le mois en cours".</summary>
+        public List<DailyClose> FindClosesOutsideCurrentMonth()
+        {
+            string currentYearMonth = DateTime.Now.ToString("yyyy-MM");
+            return _closeRepo.GetHistory()
+                .Where(c => string.IsNullOrEmpty(c.CloseDate) || c.CloseDate.Length < 7 || c.CloseDate.Substring(0, 7) != currentYearMonth)
+                .ToList();
+        }
+
+        /// <summary>Deletes every closed day (record + archive folder on disk) whose CloseDate
+        /// isn't in the current calendar month. Returns how many were deleted.</summary>
+        public int DeleteAllExceptCurrentMonth()
+        {
+            var toDelete = FindClosesOutsideCurrentMonth();
+            foreach (var close in toDelete)
+                DeleteSingle(close, deleteFolder: true);
             return toDelete.Count;
         }
 
