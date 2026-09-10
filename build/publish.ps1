@@ -9,8 +9,10 @@
 
   Requirements on the BUILD machine (not the target Win7 machine):
     - Visual Studio 2019/2022 Build Tools (or full VS) with the
-      ".NET desktop development" workload, which includes the
-      .NET Framework 4.6 targeting pack.
+      ".NET desktop development" workload, PLUS the .NET Framework 4.6
+      targeting pack added separately (the workload only bundles 4.7.2/4.8
+      by default) - via VS Installer > Modify > Individual components, or
+      the standalone "Developer Pack": choco install netfx-4.6-devpack -y
     - Internet access to nuget.org (this script downloads the
       System.Data.SQLite.Core package directly, deterministically -
       it does not rely on "nuget.exe restore").

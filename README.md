@@ -8,7 +8,7 @@ Runs on **Windows 7 SP1 and above** (32-bit and 64-bit).
 
 ## Tech stack (and why)
 
-- **C# WinForms on .NET Framework 4.6** - the last Framework version, fully
+- **C# WinForms on .NET Framework 4.6** (per project requirement), fully
   supported on Windows 7 SP1. Do **not** retarget this project to .NET 5/6/7/8/9 -
   those dropped Windows 7 support entirely.
 - **SQLite** via the `Stub.System.Data.SQLite.Core.NetFramework` NuGet package
@@ -68,7 +68,14 @@ build folder - if you'd rather xcopy-deploy instead of using the installer.)
 
 You need a **Windows machine** (or a Windows VM) with **Visual Studio 2019 or 2022**
 (Community edition is fine) and the **".NET desktop development"** workload
-installed - that workload includes the .NET Framework 4.6 targeting pack.
+installed. That workload bundles the 4.7.2/4.8 targeting packs by default, but
+**not** the .NET Framework 4.6 one this project needs - add it separately via
+the Visual Studio Installer → *Modify* → *Individual components* → search for
+".NET Framework 4.6 targeting pack" (or download the standalone
+[.NET Framework 4.6 Developer Pack](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net46)
+from Microsoft). Without it, building locally fails with the same MSB3644
+"reference assemblies ... were not found" error that CI works around with
+`choco install netfx-4.6-devpack` (see `.github/workflows/build.yml`).
 
 1. Open `PhotoStudioApp.sln` in Visual Studio.
 2. This project restores its one NuGet dependency
