@@ -38,9 +38,21 @@ namespace PhotoStudioApp.Services
             return diff == 0;
         }
 
+        // NOTE: .NET Framework 4.6 does not have the 4-argument Rfc2898DeriveBytes
+        // constructor (password, salt, iterations, HashAlgorithmName) - that overload,
+        // letting you pick SHA-256 instead of the default, was only added in .NET
+        // Framework 4.7.2. On 4.6 only the algorithm-less 3-argument constructor exists,
+        // which always uses HMACSHA1 internally. This is still a completely standard,
+        // accepted way to do PBKDF2 (RFC 2898) - just SHA-1-based instead of SHA-256-based -
+        // and is more than adequate for this app's threat model (a single local admin
+        // password gate on a studio's own PC, not a public-facing service). IMPORTANT: if
+        // this app was ever run before this change with a password already set, that old
+        // hash was computed with SHA-256 and will no longer verify against this SHA-1-based
+        // version - use "Definir le mot de passe" in Parametres once after updating to set
+        // a fresh password if that happens.
         private static byte[] DeriveBytes(string password, byte[] salt)
         {
-            using (var pbkdf2 = new Rfc2898DeriveBytes(password ?? "", salt, Iterations, HashAlgorithmName.SHA256))
+            using (var pbkdf2 = new Rfc2898DeriveBytes(password ?? "", salt, Iterations))
                 return pbkdf2.GetBytes(HashSize);
         }
     }
