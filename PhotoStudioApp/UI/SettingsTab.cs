@@ -24,15 +24,27 @@ namespace PhotoStudioApp.UI
         private TextBox _newPrefixBox;
         private NumericUpDown _retentionDaysBox;
 
-        private static readonly (string Fr, DayOfWeek Value)[] FrenchWeekdays =
+        /// <summary>Plain struct instead of a C# tuple - named-tuple syntax needs the
+        /// ValueTuple types, which only became part of mscorlib in .NET Framework 4.7+; on
+        /// 4.6 they're simply not there (and this project intentionally avoids adding the
+        /// separate System.ValueTuple NuGet package just for this one spot). Field names match
+        /// what the tuple's named elements were, so nothing below needed to change.</summary>
+        private struct WeekdayOption
         {
-            ("Lundi", DayOfWeek.Monday),
-            ("Mardi", DayOfWeek.Tuesday),
-            ("Mercredi", DayOfWeek.Wednesday),
-            ("Jeudi", DayOfWeek.Thursday),
-            ("Vendredi", DayOfWeek.Friday),
-            ("Samedi", DayOfWeek.Saturday),
-            ("Dimanche", DayOfWeek.Sunday),
+            public string Fr;
+            public DayOfWeek Value;
+            public WeekdayOption(string fr, DayOfWeek value) { Fr = fr; Value = value; }
+        }
+
+        private static readonly WeekdayOption[] FrenchWeekdays =
+        {
+            new WeekdayOption("Lundi", DayOfWeek.Monday),
+            new WeekdayOption("Mardi", DayOfWeek.Tuesday),
+            new WeekdayOption("Mercredi", DayOfWeek.Wednesday),
+            new WeekdayOption("Jeudi", DayOfWeek.Thursday),
+            new WeekdayOption("Vendredi", DayOfWeek.Friday),
+            new WeekdayOption("Samedi", DayOfWeek.Saturday),
+            new WeekdayOption("Dimanche", DayOfWeek.Sunday),
         };
 
         public SettingsTab()

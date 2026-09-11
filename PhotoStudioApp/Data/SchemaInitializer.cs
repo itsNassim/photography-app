@@ -112,6 +112,20 @@ namespace PhotoStudioApp.Data
                 SeedDefaults();
         }
 
+        /// <summary>Plain struct instead of a C# tuple - named-tuple syntax needs the
+        /// ValueTuple types, which only became part of mscorlib in .NET Framework 4.7+; on
+        /// 4.6 they're simply not there. Field names match what the tuple's named elements
+        /// were, so every usage below reads identically. `default(ColumnInfo)` (what
+        /// List&lt;T&gt;.Find returns on no match) has Name == null just like the tuple did.</summary>
+        private struct ColumnInfo
+        {
+            public string Name;
+            public string Type;
+            public bool NotNull;
+            public string DefaultValue;
+            public bool IsPk;
+        }
+
         /// <summary>If the given column on the given table currently has a NOT NULL constraint,
         /// rebuilds the table without it (SQLite has no direct "ALTER COLUMN" for this), copying
         /// every existing row and every column across unchanged. Safe to call every startup -
@@ -120,19 +134,20 @@ namespace PhotoStudioApp.Data
         {
             using (var conn = Db.OpenConnection())
             {
-                var columns = new List<(string Name, string Type, bool NotNull, string DefaultValue, bool IsPk)>();
+                var columns = new List<ColumnInfo>();
                 using (var cmd = new SQLiteCommand($"PRAGMA table_info({table});", conn))
                 using (var r = cmd.ExecuteReader())
                 {
                     while (r.Read())
                     {
-                        columns.Add((
-                            Name: r.GetString(1),
-                            Type: r.GetString(2),
-                            NotNull: r.GetInt32(3) == 1,
-                            DefaultValue: r.IsDBNull(4) ? null : r.GetValue(4).ToString(),
-                            IsPk: r.GetInt32(5) > 0
-                        ));
+                        columns.Add(new ColumnInfo
+                        {
+                            Name = r.GetString(1),
+                            Type = r.GetString(2),
+                            NotNull = r.GetInt32(3) == 1,
+                            DefaultValue = r.IsDBNull(4) ? null : r.GetValue(4).ToString(),
+                            IsPk = r.GetInt32(5) > 0
+                        });
                     }
                 }
 

@@ -1,7 +1,5 @@
 using System;
 
-using System;
-
 namespace PhotoStudioApp.Models
 {
     /// <summary>
