@@ -66,6 +66,45 @@ jobs:
           "ISS_PATH=$($iss.FullName)"       | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "SOLUTION_DIR=$($sln.DirectoryName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
+      - name: Restore Microsoft.NETFramework.ReferenceAssemblies.net46 (direct download, not a system-wide devpack install)
+        shell: pwsh
+        run: |
+          # This is Microsoft's own officially documented fix for "reference assemblies for
+          # .NETFramework,Version=v4.6 were not found" (MSB3644) on machines that don't have
+          # the exact matching Developer Pack installed - see
+          # https://learn.microsoft.com/dotnet/framework/migration-guide/reference-assemblies
+          # windows-latest's bundled VS only ships the 4.7.2/4.8 targeting packs. We tried
+          # "choco install netfx-4.6-devpack" first, but it did not reliably take effect
+          # before the build step ran - this package-based approach is fully deterministic
+          # (just files on disk, no installer/registry/reboot involved) and is the same
+          # direct-download-and-extract pattern already used for the SQLite package below.
+          $pkgId = "Microsoft.NETFramework.ReferenceAssemblies.net46"
+          $pkgVersion = "1.0.3"
+          $packagesDir = Join-Path $env:SOLUTION_DIR "packages"
+          $pkgDir = Join-Path $packagesDir "$pkgId.$pkgVersion"
+          $expectedRefDir = Join-Path $pkgDir "build\.NETFramework\v4.6"
+          $expectedMscorlib = Join-Path $expectedRefDir "mscorlib.dll"
+          $expectedWinforms = Join-Path $expectedRefDir "System.Windows.Forms.dll"
+
+          New-Item -ItemType Directory -Force -Path $packagesDir | Out-Null
+          $zipPath = Join-Path $env:RUNNER_TEMP "$pkgId.$pkgVersion.nupkg.zip"
+
+          Write-Host "Downloading $pkgId $pkgVersion from nuget.org ..."
+          Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/$pkgId/$pkgVersion" -OutFile $zipPath -UseBasicParsing
+
+          Write-Host "Extracting into $pkgDir ..."
+          Expand-Archive -Path $zipPath -DestinationPath $pkgDir -Force
+
+          Write-Host "Package contents:"
+          Get-ChildItem -Recurse $pkgDir | Select-Object -First 60 | ForEach-Object { Write-Host $_.FullName }
+
+          if (-not (Test-Path $expectedMscorlib) -or -not (Test-Path $expectedWinforms)) {
+            Write-Host "Full package contents (for debugging):"
+            Get-ChildItem -Recurse $pkgDir | ForEach-Object { Write-Host $_.FullName }
+            throw "Downloaded the package but did not find mscorlib.dll / System.Windows.Forms.dll under $expectedRefDir - PhotoStudioApp.csproj's NetFx46RefAssembliesPackageDir may need updating to match the real layout."
+          }
+          Write-Host "OK - found reference assemblies under $expectedRefDir (including mscorlib.dll and System.Windows.Forms.dll)"
+
       - name: Restore Stub.System.Data.SQLite.Core.NetFramework (direct download, not nuget restore)
         shell: pwsh
         run: |
