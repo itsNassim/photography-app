@@ -93,6 +93,14 @@ namespace PhotoStudioApp.Data
                         Amount         REAL NOT NULL
                     );");
 
+                Exec(conn, @"
+                    CREATE TABLE IF NOT EXISTS PendingBalances (
+                        Id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                        Description      TEXT NOT NULL,
+                        RemainingAmount  REAL NOT NULL,
+                        CreatedDate      TEXT NOT NULL
+                    );");
+
                 tx.Commit();
             }
 

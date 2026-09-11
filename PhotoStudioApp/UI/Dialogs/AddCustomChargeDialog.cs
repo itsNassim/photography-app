@@ -11,32 +11,36 @@ namespace PhotoStudioApp.UI.Dialogs
     {
         public CustomCharge ResultCharge { get; private set; }
 
-        /// <summary>One dropdown entry - either a stock item, a fixed-price no-folder
-        /// category, or the "none / manual" placeholder.</summary>
+        /// <summary>One dropdown entry - a stock item, a fixed-price no-folder category, an
+        /// outstanding pending balance being paid off, or the "none / manual" placeholder.</summary>
         private class LinkOption
         {
             public string Label;
             public StockItem Stock;
             public Category ServiceCategory;
+            public PendingBalance Balance;
             public override string ToString() => Label;
         }
 
         private readonly TextBox _descBox;
         private readonly NumericUpDown _amountBox;
+        private readonly NumericUpDown _paidAmountBox;
         private readonly TextBox _searchBox;
         private readonly ComboBox _linkCombo;
         private readonly NumericUpDown _qtyBox;
         private readonly CheckBox _autoAmountCheck;
         private readonly StockRepository _stockRepo = new StockRepository();
         private readonly CategoryRepository _categoryRepo = new CategoryRepository();
+        private readonly PendingBalanceRepository _pendingRepo = new PendingBalanceRepository();
         private List<LinkOption> _allOptions = new List<LinkOption>();
         private bool _restoringExisting;
+        private decimal _lastSyncedPaidValue;
 
-        public AddCustomChargeDialog(CustomCharge existing = null)
+        public AddCustomChargeDialog(CustomCharge existing = null, PendingBalance preselectedBalance = null)
         {
             Text = existing == null ? "Ajouter une charge additionnelle" : "Modifier la charge additionnelle";
             Width = 480;
-            Height = 430;
+            Height = 480;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             StartPosition = FormStartPosition.CenterParent;
             MaximizeBox = false;
@@ -53,9 +57,8 @@ namespace PhotoStudioApp.UI.Dialogs
             _searchBox.TextChanged += (s, e) => ApplySearchFilter();
             layout.Controls.Add(_searchBox, 1, 0);
 
-            layout.Controls.Add(new Label { Text = "Categorie ou article de stock\n(optionnel) :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 1);
+            layout.Controls.Add(new Label { Text = "Categorie, article de stock,\nou solde en attente (optionnel) :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 1);
             _linkCombo = new ComboBox { Width = 270, DropDownStyle = ComboBoxStyle.DropDownList };
-            BuildLinkOptions(); // also wires SelectedIndexChanged and selects index 0 via RepopulateCombo
             layout.Controls.Add(_linkCombo, 1, 1);
 
             layout.Controls.Add(new Label { Text = "Description :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 2);
@@ -72,9 +75,17 @@ namespace PhotoStudioApp.UI.Dialogs
             _autoAmountCheck.CheckedChanged += (s, e) => RecomputeAutoAmount();
             layout.Controls.Add(_autoAmountCheck, 1, 4);
 
-            layout.Controls.Add(new Label { Text = "Montant :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 5);
+            layout.Controls.Add(new Label { Text = "Montant total :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 5);
             _amountBox = new NumericUpDown { Width = 120, Minimum = 0, Maximum = 1000000, DecimalPlaces = 2, Value = existing?.Amount ?? 0 };
+            _amountBox.ValueChanged += (s, e) => SyncPaidToAmountIfUnlinkedDefault();
             layout.Controls.Add(_amountBox, 1, 5);
+
+            // "Montant paye maintenant" comes LAST (after Montant/quantite/etc. are settled) so
+            // filling in the rest of the form never overwrites a partial-payment amount the user
+            // already typed here - see SyncPaidToAmountIfUnlinkedDefault.
+            layout.Controls.Add(new Label { Text = "Montant paye maintenant\n(si different, le reste devient\nun solde en attente) :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 6);
+            _paidAmountBox = new NumericUpDown { Width = 120, Minimum = 0, Maximum = 1000000, DecimalPlaces = 2, Value = existing?.Amount ?? 0 };
+            layout.Controls.Add(_paidAmountBox, 1, 6);
 
             var btnPanel = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Dock = DockStyle.Fill };
             var okBtn = Theme.MakePrimaryButton("Enregistrer");
@@ -90,6 +101,12 @@ namespace PhotoStudioApp.UI.Dialogs
             Controls.Add(layout);
             AcceptButton = okBtn;
             CancelButton = cancelBtn;
+
+            // Populate the dropdown (and wire its change handler) only now that every field it
+            // touches (_qtyBox, _autoAmountCheck, _descBox, _amountBox, _paidAmountBox) actually
+            // exists - this used to run right after _linkCombo was created, before those fields
+            // existed yet, which threw a NullReferenceException the instant the dialog opened.
+            BuildLinkOptions();
 
             if (existing?.LinkedStockItemId != null)
             {
@@ -111,6 +128,16 @@ namespace PhotoStudioApp.UI.Dialogs
                     _restoringExisting = false;
                 }
             }
+            else if (preselectedBalance != null)
+            {
+                // Pre-select a pending balance so this dialog opens ready to record a payment
+                // toward it - used by the Home tab's "Soldes en attente" section's "Payer"
+                // button. Not wrapped in _restoringExisting: we WANT the normal auto-fill
+                // (description + amount = remaining balance) that a fresh selection triggers.
+                int idx = FindOptionIndex(o => o.Balance != null && o.Balance.Id == preselectedBalance.Id);
+                if (idx >= 0)
+                    _linkCombo.SelectedIndex = idx;
+            }
 
             // Restore the saved description LAST, after any selection-restore above may have
             // touched the textbox, so an edited charge keeps exactly what was saved.
@@ -129,6 +156,13 @@ namespace PhotoStudioApp.UI.Dialogs
         private void BuildLinkOptions()
         {
             _allOptions = new List<LinkOption> { new LinkOption { Label = "(aucun - saisie manuelle)" } };
+
+            var pendingBalances = _pendingRepo.GetAll();
+            foreach (var bal in pendingBalances)
+            {
+                string label = $"[Solde en attente] {bal.Description}  (reste : {bal.RemainingAmount:0.00})";
+                _allOptions.Add(new LinkOption { Label = label, Balance = bal });
+            }
 
             var stockItems = _stockRepo.GetAll(activeOnly: true);
             foreach (var item in stockItems)
@@ -154,8 +188,8 @@ namespace PhotoStudioApp.UI.Dialogs
         }
 
         /// <summary>Filters the dropdown live as the user types in the search box, by item/stock
-        /// name, by category name, or by service-category name - makes finding the right
-        /// category quick even when there are many stock items/categories to scroll through.</summary>
+        /// name, stock category, service-category name, or pending-balance description - makes
+        /// finding the right entry quick even when there are many to scroll through.</summary>
         private void ApplySearchFilter()
         {
             string term = _searchBox.Text?.Trim() ?? "";
@@ -173,7 +207,9 @@ namespace PhotoStudioApp.UI.Dialogs
                         o.Stock.Name.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0 ||
                         (o.Stock.Category ?? "").IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0)) ||
                     (o.ServiceCategory != null &&
-                        o.ServiceCategory.Name.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0);
+                        o.ServiceCategory.Name.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0) ||
+                    (o.Balance != null &&
+                        o.Balance.Description.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0);
                 if (matches)
                     filtered.Add(o);
             }
@@ -206,12 +242,31 @@ namespace PhotoStudioApp.UI.Dialogs
         private void LinkCombo_SelectedIndexChanged(object sender, EventArgs e)
         {
             var option = SelectedOption();
-            bool linked = option?.Stock != null || option?.ServiceCategory != null;
+            bool linkedToPriced = option?.Stock != null || option?.ServiceCategory != null;
+            bool linkedToBalance = option?.Balance != null;
 
-            _qtyBox.Enabled = linked;
-            _autoAmountCheck.Enabled = linked;
+            _qtyBox.Enabled = linkedToPriced;
+            _autoAmountCheck.Enabled = linkedToPriced;
 
-            if (linked)
+            if (linkedToBalance)
+            {
+                // Paying off (or partially paying) an existing balance: the total is fixed at
+                // whatever's still owed - not editable here, since that total was already set
+                // when the balance was first created.
+                _amountBox.Value = Math.Min(_amountBox.Maximum, option.Balance.RemainingAmount);
+                _amountBox.Enabled = false;
+                _paidAmountBox.Value = _amountBox.Value;
+
+                if (!_restoringExisting)
+                {
+                    _descBox.Text = option.Balance.Description;
+                    _descBox.SelectionStart = _descBox.Text.Length;
+                    _descBox.Focus();
+                }
+                return;
+            }
+
+            if (linkedToPriced)
             {
                 _qtyBox.Value = Math.Max(1, _qtyBox.Value);
 
@@ -227,11 +282,17 @@ namespace PhotoStudioApp.UI.Dialogs
 
                 RecomputeAutoAmount();
             }
+            else
+            {
+                _amountBox.Enabled = true;
+            }
         }
 
         private void RecomputeAutoAmount()
         {
             var option = SelectedOption();
+            if (option?.Balance != null) return; // amount is fixed to the remaining balance instead
+
             decimal? unitPrice = option?.Stock?.UnitPrice ?? option?.ServiceCategory?.CurrentPrice;
 
             if (unitPrice.HasValue && _autoAmountCheck.Checked)
@@ -243,6 +304,21 @@ namespace PhotoStudioApp.UI.Dialogs
             {
                 _amountBox.Enabled = true;
             }
+
+            SyncPaidToAmountIfUnlinkedDefault();
+        }
+
+        /// <summary>Keeps "Montant paye maintenant" defaulted to the full Montant as the user
+        /// fills in the rest of the form (so the common case - fully paid - needs no extra
+        /// step), WITHOUT clobbering a partial amount the user may have already typed there:
+        /// this only re-syncs the value while the two boxes still match (i.e. nothing has
+        /// diverged them yet). Once the user edits "Montant paye maintenant" to anything
+        /// different from Montant, this stops touching it.</summary>
+        private void SyncPaidToAmountIfUnlinkedDefault()
+        {
+            if (_paidAmountBox.Value == _lastSyncedPaidValue)
+                _paidAmountBox.Value = Math.Min(_paidAmountBox.Maximum, _amountBox.Value);
+            _lastSyncedPaidValue = _paidAmountBox.Value;
         }
 
         private void OkBtn_Click(object sender, EventArgs e)
@@ -272,14 +348,41 @@ namespace PhotoStudioApp.UI.Dialogs
                 }
             }
 
+            decimal total = _amountBox.Value;
+            decimal paidNow = Math.Min(_paidAmountBox.Value, total);
+            decimal shortfall = total - paidNow;
+
+            if (shortfall > 0.005m && !string.IsNullOrWhiteSpace(_descBox.Text))
+            {
+                string msg = option?.Balance != null
+                    ? $"{paidNow:0.00} paye maintenant sur ce solde - il restera {shortfall:0.00} en attente. Continuer ?"
+                    : $"Le client paye {paidNow:0.00} sur un total de {total:0.00} - un solde en attente de {shortfall:0.00} sera cree pour \"{_descBox.Text.Trim()}\". Continuer ?";
+                if (MessageBox.Show(msg, "Paiement partiel", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                    return;
+            }
+
+            // Only the amount actually collected today counts as this charge's amount - it's
+            // what gets added to TODAY's revenue total, per the "paid on the day it's paid"
+            // rule. The unpaid shortfall (if any) is tracked separately as a pending balance,
+            // never as part of today's total.
             ResultCharge = new CustomCharge
             {
                 Description = _descBox.Text.Trim(),
-                Amount = _amountBox.Value,
+                Amount = paidNow,
                 LinkedStockItemId = option?.Stock?.Id,
                 LinkedCategoryId = option?.ServiceCategory?.Id,
                 Quantity = (option?.Stock != null || option?.ServiceCategory != null) ? (int)_qtyBox.Value : (int?)null
             };
+
+            if (option?.Balance != null)
+            {
+                _pendingRepo.ReduceOrDelete(option.Balance.Id, paidNow);
+            }
+            else if (shortfall > 0.005m)
+            {
+                _pendingRepo.Add(_descBox.Text.Trim(), shortfall, DateTime.Now.ToString("yyyy-MM-dd"));
+            }
+
             DialogResult = DialogResult.OK;
             Close();
         }

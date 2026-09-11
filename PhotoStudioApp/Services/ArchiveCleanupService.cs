@@ -1,15 +1,16 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using PhotoStudioApp.Data;
 using PhotoStudioApp.Models;
 
 namespace PhotoStudioApp.Services
 {
-    /// <summary>Everything to do with deleting archived days - a single day, everything older
-    /// than a configured retention period, or the whole archive at once. Always deletes the DB
-    /// record and the on-disk folder together, so History and the actual archive stay in sync.</summary>
+    /// <summary>Everything to do with removing archived days from the History list/counts - a
+    /// single day, everything older than a configured retention period, or the whole history at
+    /// once. PERMANENT POLICY: archive folders on disk (the actual photos) are NEVER deleted by
+    /// anything in this class, under any circumstance - every method here only ever removes the
+    /// database/history record. Do not reintroduce folder deletion here.</summary>
     public class ArchiveCleanupService
     {
         private readonly DailyCloseRepository _closeRepo = new DailyCloseRepository();
@@ -26,27 +27,25 @@ namespace PhotoStudioApp.Services
         }
 
         /// <summary>Deletes one closed day's database record (removing it - and its revenue -
-        /// from the History count/list). By default the archive folder on disk is left alone:
-        /// the History "Supprimer" button only removes the entry from the count/history, it does
-        /// NOT touch the actual archived photos. Pass deleteFolder=true for callers that
-        /// genuinely want to reclaim disk space too (retention cleanup, "tout supprimer",
-        /// "garder ce mois uniquement").</summary>
-        public void DeleteSingle(DailyClose close, bool deleteFolder = false)
+        /// from the History count/list). The archive folder on disk is NEVER touched by this or
+        /// any other method in this class - only the count/history entry is ever removed. This
+        /// is an explicit, permanent policy: archive folders (the actual photos) must never be
+        /// deleted by any bulk or single "cleanup"/"delete" action in the app, no matter which
+        /// button triggered it.</summary>
+        public void DeleteSingle(DailyClose close)
         {
-            if (deleteFolder)
-                TryDeleteFolder(close.ArchiveFolderPath);
             _closeRepo.DeleteClose(close.Id);
         }
 
-        /// <summary>Runs DeleteSingle (with the archive folder actually removed, to reclaim disk
-        /// space) for every closed day older than the configured retention setting. Returns how
-        /// many were deleted.</summary>
+        /// <summary>Runs DeleteSingle (history entry only - see the note on DeleteSingle) for
+        /// every closed day older than the configured retention setting. Returns how many were
+        /// deleted.</summary>
         public int CleanupOlderThanConfiguredRetention()
         {
             var settings = _settingsRepo.LoadAll();
             var toDelete = FindClosesOlderThan(settings.ArchiveRetentionDays);
             foreach (var close in toDelete)
-                DeleteSingle(close, deleteFolder: true);
+                DeleteSingle(close);
             return toDelete.Count;
         }
 
@@ -60,57 +59,24 @@ namespace PhotoStudioApp.Services
                 .ToList();
         }
 
-        /// <summary>Deletes every closed day (record + archive folder on disk) whose CloseDate
-        /// isn't in the current calendar month. Returns how many were deleted.</summary>
+        /// <summary>Removes the history entry (only - see the note on DeleteSingle) for every
+        /// closed day whose CloseDate isn't in the current calendar month. Returns how many
+        /// were removed.</summary>
         public int DeleteAllExceptCurrentMonth()
         {
             var toDelete = FindClosesOutsideCurrentMonth();
             foreach (var close in toDelete)
-                DeleteSingle(close, deleteFolder: true);
+                DeleteSingle(close);
             return toDelete.Count;
         }
 
-        /// <summary>Deletes EVERYTHING: every archived day's folder under the archive root, and
-        /// every history record. The archive root folder itself is left in place (emptied), so
-        /// the configured path keeps working without needing to be re-selected.</summary>
+        /// <summary>Clears every history entry (ALL of them). Per the permanent no-folder-deletion
+        /// policy, archive folders on disk are NEVER touched by this - "Tout supprimer" only
+        /// wipes the History list/counts, exactly like every other delete action in this class.
+        /// The photos remain on disk under the archive root, untouched.</summary>
         public void DeleteAll()
         {
-            var settings = _settingsRepo.LoadAll();
-
-            if (!string.IsNullOrWhiteSpace(settings.ArchiveRootPath) && Directory.Exists(settings.ArchiveRootPath))
-            {
-                foreach (var entry in Directory.EnumerateFileSystemEntries(settings.ArchiveRootPath))
-                {
-                    try
-                    {
-                        if (Directory.Exists(entry))
-                            Directory.Delete(entry, recursive: true);
-                        else
-                            File.Delete(entry);
-                    }
-                    catch
-                    {
-                        // Best-effort: skip anything locked/in-use rather than aborting the
-                        // whole cleanup over one stubborn file.
-                    }
-                }
-            }
-
             _closeRepo.DeleteAllHistory();
-        }
-
-        private void TryDeleteFolder(string path)
-        {
-            try
-            {
-                if (!string.IsNullOrWhiteSpace(path) && Directory.Exists(path))
-                    Directory.Delete(path, recursive: true);
-            }
-            catch
-            {
-                // Best-effort - if the folder is locked/in-use/already gone, still remove the
-                // DB record so History doesn't get stuck pointing at something unusable.
-            }
         }
     }
 }

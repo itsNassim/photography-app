@@ -104,11 +104,13 @@
     <Compile Include="Models\StockItem.cs" />
     <Compile Include="Models\CustomCharge.cs" />
     <Compile Include="Models\DailyClose.cs" />
+    <Compile Include="Models\PendingBalance.cs" />
     <Compile Include="Models\AppSettings.cs" />
     <Compile Include="Data\Db.cs" />
     <Compile Include="Data\SchemaInitializer.cs" />
     <Compile Include="Data\CategoryRepository.cs" />
     <Compile Include="Data\StockRepository.cs" />
+    <Compile Include="Data\PendingBalanceRepository.cs" />
     <Compile Include="Data\CustomChargeRepository.cs" />
     <Compile Include="Data\DailyCloseRepository.cs" />
     <Compile Include="Data\SettingsRepository.cs" />

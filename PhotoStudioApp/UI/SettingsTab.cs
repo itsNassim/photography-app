@@ -23,6 +23,7 @@ namespace PhotoStudioApp.UI
         private ListBox _prefixesList;
         private TextBox _newPrefixBox;
         private NumericUpDown _retentionDaysBox;
+        private DateTimePicker _currentWorkDatePicker;
 
         /// <summary>Plain struct instead of a C# tuple - named-tuple syntax needs the
         /// ValueTuple types, which only became part of mscorlib in .NET Framework 4.7+; on
@@ -178,6 +179,26 @@ namespace PhotoStudioApp.UI
             card.Controls.Add(pwdPanel, 1, row);
             row++;
 
+            AddLabel(card, "Date de travail actuelle\n(protege par mot de passe) :", row);
+            var datePanel = new FlowLayoutPanel { AutoSize = true };
+            _currentWorkDatePicker = new DateTimePicker { Width = 150, Format = DateTimePickerFormat.Short, Font = Theme.FontBase };
+            var changeDateBtn = Theme.MakeSecondaryButton("Changer la date");
+            changeDateBtn.Image = IconGlyphs.Lock(16);
+            changeDateBtn.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            changeDateBtn.TextImageRelation = TextImageRelation.ImageBeforeText;
+            changeDateBtn.Width = 170;
+            changeDateBtn.Margin = new Padding(10, 0, 0, 0);
+            changeDateBtn.Click += ChangeDateBtn_Click;
+            datePanel.Controls.Add(_currentWorkDatePicker);
+            datePanel.Controls.Add(changeDateBtn);
+            card.Controls.Add(datePanel, 1, row);
+            card.Controls.Add(new Label
+            {
+                Text = "Renomme aussi le dossier du jour dans le\ndossier du studio avec la nouvelle date.",
+                AutoSize = true, ForeColor = System.Drawing.Color.Gray, Margin = new Padding(3, 8, 0, 0)
+            }, 2, row);
+            row++;
+
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.Controls.Add(card);
 
@@ -257,6 +278,81 @@ namespace PhotoStudioApp.UI
 
             _passwordStatusLabel.Text = string.IsNullOrEmpty(s.PasswordHash) ? "Non defini" : "Mot de passe defini";
             _passwordStatusLabel.ForeColor = string.IsNullOrEmpty(s.PasswordHash) ? Theme.Warning : Theme.Success;
+
+            if (DateTime.TryParseExact(s.CurrentWorkDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out DateTime workDate))
+                _currentWorkDatePicker.Value = workDate;
+        }
+
+        /// <summary>Lets an admin correct today's working date (e.g. the studio forgot to close
+        /// out a day and it's now behind) - protected by the admin password since it directly
+        /// affects revenue accounting and touches a live folder on disk. Renames the CURRENT
+        /// working-day folder in the studio root to match the new date's folder name (same
+        /// DateFolderFormat everything else uses), so the folder on disk always matches
+        /// CurrentWorkDate. If no folder exists yet for the old date, a fresh one is simply
+        /// created for the new date instead of renaming.</summary>
+        private void ChangeDateBtn_Click(object sender, EventArgs e)
+        {
+            if (!AuthGate.RequireAdminPassword(this)) return;
+
+            var settings = _repo.LoadAll();
+            if (!DateTime.TryParseExact(settings.CurrentWorkDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out DateTime oldDate))
+                oldDate = DateTime.Today;
+            DateTime newDate = _currentWorkDatePicker.Value.Date;
+
+            if (newDate == oldDate)
+            {
+                MessageBox.Show("C'est deja la date de travail actuelle.", "Aucun changement", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(settings.StudioRootPath))
+            {
+                MessageBox.Show("Configurez d'abord le dossier du studio.", "Information manquante", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string oldFolderName = oldDate.ToString(settings.DateFolderFormat, AppCulture.French);
+            string newFolderName = newDate.ToString(settings.DateFolderFormat, AppCulture.French);
+            string oldFolderAbs = System.IO.Path.Combine(settings.StudioRootPath, oldFolderName);
+            string newFolderAbs = System.IO.Path.Combine(settings.StudioRootPath, newFolderName);
+
+            if (MessageBox.Show(
+                $"Changer la date de travail du {oldDate:dd/MM/yyyy} au {newDate:dd/MM/yyyy} ?\n\n" +
+                $"Le dossier du jour dans le studio sera renomme :\n\"{oldFolderName}\" -> \"{newFolderName}\"",
+                "Confirmer le changement de date", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                return;
+
+            try
+            {
+                if (System.IO.Directory.Exists(oldFolderAbs))
+                {
+                    if (System.IO.Directory.Exists(newFolderAbs) && !string.Equals(oldFolderAbs, newFolderAbs, StringComparison.OrdinalIgnoreCase))
+                    {
+                        MessageBox.Show(
+                            $"Un dossier nomme \"{newFolderName}\" existe deja dans le studio - impossible de renommer sans ecraser son contenu.\n\n" +
+                            "Renommez ou deplacez ce dossier manuellement avant de reessayer.",
+                            "Impossible de renommer", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return;
+                    }
+                    if (!string.Equals(oldFolderAbs, newFolderAbs, StringComparison.OrdinalIgnoreCase))
+                        System.IO.Directory.Move(oldFolderAbs, newFolderAbs);
+                }
+                else
+                {
+                    System.IO.Directory.CreateDirectory(newFolderAbs);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Impossible de renommer/creer le dossier du jour :\n" + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            settings.CurrentWorkDate = newDate.ToString("yyyy-MM-dd");
+            _repo.SaveAll(settings);
+            RefreshAll();
+            SettingsSaved?.Invoke(this, EventArgs.Empty);
+            MessageBox.Show("Date de travail mise a jour.", "Termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void SetPwdBtn_Click(object sender, EventArgs e)

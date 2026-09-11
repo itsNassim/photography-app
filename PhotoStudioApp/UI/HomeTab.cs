@@ -18,11 +18,13 @@ namespace PhotoStudioApp.UI
         private readonly CustomChargeRepository _chargeRepo = new CustomChargeRepository();
         private readonly StockRepository _stockRepo = new StockRepository();
         private readonly SettingsRepository _settingsRepo = new SettingsRepository();
+        private readonly PendingBalanceRepository _pendingRepo = new PendingBalanceRepository();
         private readonly FolderCountService _folders = new FolderCountService();
         private readonly ClosingService _closingService = new ClosingService();
 
         private DataGridView _categoryGrid;
         private DataGridView _chargesGrid;
+        private DataGridView _pendingGrid;
         private Label _dateLabel;
         private Timer _autoRefreshTimer;
 
@@ -61,12 +63,13 @@ namespace PhotoStudioApp.UI
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 1,
-                RowCount = 4,
+                RowCount = 5,
                 Padding = new Padding(16)
             };
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            root.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
-            root.RowStyles.Add(new RowStyle(SizeType.Percent, 35));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 45));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 30));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 15));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
             // --- En-tete : date + bouton actualiser ---
@@ -126,6 +129,38 @@ namespace PhotoStudioApp.UI
             chargesOuter.Controls.Add(chargesPanel, 0, 1);
             root.Controls.Add(chargesOuter, 0, 2);
 
+            // --- Soldes en attente (paiements partiels non termines) ---
+            var pendingOuter = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 1 };
+            pendingOuter.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            pendingOuter.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+            var pendingHeader = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill };
+            var pendingTitle = new Label { Text = "Soldes en attente (paiements partiels)", Font = Theme.FontSubheading, AutoSize = true, Margin = new Padding(0, 6, 20, 6) };
+            var payBalanceBtn = Theme.MakePrimaryButton("Payer");
+            payBalanceBtn.Width = 110;
+            payBalanceBtn.Click += PayBalanceBtn_Click;
+            var refreshPendingBtn = Theme.MakeSecondaryButton("Actualiser");
+            refreshPendingBtn.Image = IconGlyphs.Refresh(16);
+            refreshPendingBtn.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            refreshPendingBtn.TextImageRelation = TextImageRelation.ImageBeforeText;
+            refreshPendingBtn.Width = 130;
+            refreshPendingBtn.Click += (s, e) => RefreshPendingBalances();
+            pendingHeader.Controls.Add(pendingTitle);
+            pendingHeader.Controls.Add(payBalanceBtn);
+            pendingHeader.Controls.Add(refreshPendingBtn);
+
+            var pendingPanel = new Panel { Dock = DockStyle.Fill, BackColor = Theme.CardBackground };
+            _pendingGrid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true };
+            Theme.StyleGrid(_pendingGrid);
+            _pendingGrid.Columns.Add("Description", "Description");
+            _pendingGrid.Columns.Add("Remaining", "Reste a payer");
+            _pendingGrid.CellDoubleClick += (s, e) => PayBalanceBtn_Click(s, e);
+            pendingPanel.Controls.Add(_pendingGrid);
+
+            pendingOuter.Controls.Add(pendingHeader, 0, 0);
+            pendingOuter.Controls.Add(pendingPanel, 0, 1);
+            root.Controls.Add(pendingOuter, 0, 3);
+
             // --- Pied de page : bouton Cloturer la journee (pas d'apercu de total, sur demande) ---
             var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Margin = new Padding(0, 12, 0, 0) };
             var closeDayBtn = Theme.MakePrimaryButton("Cloturer la journee");
@@ -136,7 +171,7 @@ namespace PhotoStudioApp.UI
             closeDayBtn.Height = 46;
             closeDayBtn.Click += CloseDayBtn_Click;
             footer.Controls.Add(closeDayBtn);
-            root.Controls.Add(footer, 0, 3);
+            root.Controls.Add(footer, 0, 4);
 
             Controls.Add(root);
         }
@@ -151,6 +186,7 @@ namespace PhotoStudioApp.UI
 
             RefreshCategoryCountsOnly();
             RefreshCharges();
+            RefreshPendingBalances();
         }
 
         public void RefreshCategoryCountsOnly()
@@ -187,6 +223,48 @@ namespace PhotoStudioApp.UI
                 string linked = c.LinkedStockItemName ?? c.LinkedCategoryName ?? "-";
                 int rowIdx = _chargesGrid.Rows.Add(c.Description, linked, c.Quantity?.ToString() ?? "-", c.Amount.ToString("0.00"));
                 _chargesGrid.Rows[rowIdx].Tag = c.Id;
+            }
+        }
+
+        /// <summary>Refreshes the "Soldes en attente" grid - clients who only paid part of a
+        /// charge. A balance disappears from here automatically once fully paid off (see
+        /// PendingBalanceRepository.ReduceOrDelete), and can be paid down further (or fully
+        /// settled) via the "Payer" button here or by picking it again from "Ajouter une
+        /// charge"'s dropdown.</summary>
+        private void RefreshPendingBalances()
+        {
+            if (_pendingGrid == null) return;
+            var balances = _pendingRepo.GetAll();
+            _pendingGrid.Rows.Clear();
+            foreach (var b in balances)
+            {
+                int rowIdx = _pendingGrid.Rows.Add(b.Description, b.RemainingAmount.ToString("0.00"));
+                _pendingGrid.Rows[rowIdx].Tag = b.Id;
+            }
+        }
+
+        private void PayBalanceBtn_Click(object sender, EventArgs e)
+        {
+            if (_pendingGrid.CurrentRow?.Tag == null)
+            {
+                MessageBox.Show("Selectionnez d'abord un solde dans la liste.", "Aucune selection", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            int id = (int)_pendingGrid.CurrentRow.Tag;
+            var balance = _pendingRepo.GetById(id);
+            if (balance == null) return;
+
+            using (var dlg = new AddCustomChargeDialog(preselectedBalance: balance))
+            {
+                if (dlg.ShowDialog() == DialogResult.OK)
+                {
+                    var settings = _settingsRepo.LoadAll();
+                    var charge = dlg.ResultCharge;
+                    charge.WorkDate = settings.CurrentWorkDate;
+                    _chargeRepo.Add(charge);
+                    RefreshCharges();
+                    RefreshPendingBalances();
+                }
             }
         }
 
@@ -299,6 +377,7 @@ namespace PhotoStudioApp.UI
                             MessageBox.Show($"'{item.Name}' est maintenant en rupture de stock.", "Alerte stock", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     }
                     RefreshCharges();
+                    RefreshPendingBalances();
                 }
             }
         }
@@ -327,6 +406,7 @@ namespace PhotoStudioApp.UI
                         _stockRepo.AdjustQuantity(updated.LinkedStockItemId.Value, -updated.Quantity.Value);
 
                     RefreshCharges();
+                    RefreshPendingBalances();
                 }
             }
         }

@@ -260,7 +260,7 @@ namespace PhotoStudioApp.UI
                 "Confirmer la suppression", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
                 return;
 
-            _cleanupService.DeleteSingle(close, deleteFolder: false);
+            _cleanupService.DeleteSingle(close);
             LoadHistory();
         }
 
@@ -294,14 +294,16 @@ namespace PhotoStudioApp.UI
             if (!AuthGate.RequireAdminPassword(this)) return;
 
             if (MessageBox.Show(
-                $"{candidates.Count} journee(s) en dehors du mois en cours vont etre supprimees " +
-                "definitivement (dossiers archives + historique). Seul le mois en cours sera conserve. Continuer ?",
+                $"{candidates.Count} journee(s) en dehors du mois en cours vont etre retirees " +
+                "de l'historique (le compte/total seulement - les dossiers archives sur le disque " +
+                "ne sont JAMAIS supprimes, quel que soit le bouton utilise). Seul le mois en cours " +
+                "restera dans l'historique. Continuer ?",
                 "Confirmer le nettoyage", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
                 return;
 
             int deleted = _cleanupService.DeleteAllExceptCurrentMonth();
             LoadHistory();
-            MessageBox.Show($"{deleted} journee(s) supprimee(s). Seul le mois en cours a ete conserve.", "Nettoyage termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show($"{deleted} journee(s) retiree(s) de l'historique (dossiers archives conserves). Seul le mois en cours reste dans l'historique.", "Nettoyage termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void CleanupBtn_Click(object sender, EventArgs e)
@@ -329,13 +331,14 @@ namespace PhotoStudioApp.UI
 
             if (MessageBox.Show(
                 $"{candidates.Count} journee(s) de plus de {settings.ArchiveRetentionDays} jour(s) vont etre " +
-                "supprimees definitivement (dossiers archives + historique). Continuer ?",
+                "retirees de l'historique (le compte/total seulement - les dossiers archives sur le disque " +
+                "ne sont JAMAIS supprimes). Continuer ?",
                 "Confirmer le nettoyage", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
                 return;
 
             int deleted = _cleanupService.CleanupOlderThanConfiguredRetention();
             LoadHistory();
-            MessageBox.Show($"{deleted} journee(s) supprimee(s).", "Nettoyage termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show($"{deleted} journee(s) retiree(s) de l'historique (dossiers archives conserves).", "Nettoyage termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void ClearAllBtn_Click(object sender, EventArgs e)
@@ -343,14 +346,16 @@ namespace PhotoStudioApp.UI
             if (!AuthGate.RequireAdminPassword(this)) return;
 
             if (MessageBox.Show(
-                "Ceci va supprimer DEFINITIVEMENT TOUTES les archives photo et TOUT l'historique.\n\n" +
-                "Cette action est IRREVERSIBLE et ne peut pas etre annulee.\n\n" +
+                "Ceci va vider DEFINITIVEMENT tout l'historique (tous les comptes/totaux de journees).\n\n" +
+                "Les dossiers archives sur le disque (les photos elles-memes) ne sont JAMAIS supprimes " +
+                "par cette action, ni par aucune autre action de nettoyage dans l'application - ils " +
+                "resteront intacts sous le dossier d'archive.\n\n" +
                 "Voulez-vous continuer ?",
-                "Attention - suppression totale", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                "Attention - vider l'historique", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
                 return;
 
             using (var confirm = new TypeToConfirmDialog(
-                "Vous etes sur le point de supprimer TOUTES les archives et TOUT l'historique.",
+                "Vous etes sur le point de vider TOUT l'historique (les dossiers archives seront conserves).",
                 "SUPPRIMER"))
             {
                 if (confirm.ShowDialog(this) != DialogResult.OK)
@@ -359,7 +364,7 @@ namespace PhotoStudioApp.UI
 
             _cleanupService.DeleteAll();
             LoadHistory();
-            MessageBox.Show("Toutes les archives et l'historique ont ete supprimes.", "Termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show("L'historique a ete vide. Les dossiers archives sur le disque ont ete conserves.", "Termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
     }
 }
