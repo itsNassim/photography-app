@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -164,7 +164,7 @@ namespace PhotoStudioApp.Services
                 var fields = ParseCsvLine(line);
                 if (fields.Count != expectedColumns)
                 {
-                    result.Errors.Add($"Ligne {i + 1} ignoree (nombre de colonnes inattendu).");
+                    result.Errors.Add($"Ligne {i + 1} ignorée (nombre de colonnes inattendu).");
                     continue;
                 }
                 yield return fields.ToArray();

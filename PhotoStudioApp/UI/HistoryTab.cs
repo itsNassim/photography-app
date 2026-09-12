@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows.Forms;
 using PhotoStudioApp.Data;
 using PhotoStudioApp.Models;
@@ -44,13 +44,13 @@ namespace PhotoStudioApp.UI
             };
             var lockLabel = new Label
             {
-                Text = "L'historique est protege par mot de passe.",
+                Text = "L'historique est protégé par mot de passe.",
                 Font = Theme.FontSubheading,
                 AutoSize = true,
                 Margin = new Padding(0, 0, 0, 12),
                 TextAlign = System.Drawing.ContentAlignment.MiddleCenter
             };
-            var unlockBtn = Theme.MakePrimaryButton("Deverrouiller");
+            var unlockBtn = Theme.MakePrimaryButton("Déverrouiller");
             unlockBtn.Width = 160;
             unlockBtn.Click += (s, e) => TryUnlock();
             centerPanel.Controls.Add(lockIcon);
@@ -62,23 +62,23 @@ namespace PhotoStudioApp.UI
             lockLayout.Controls.Add(new Panel(), 0, 2);
             _lockedPanel.Controls.Add(lockLayout);
 
-            // --- Vue deverrouillee (historique / archive) ---
+            // --- Vue déverrouillée (historique / archive) ---
             _contentPanel = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background };
 
             var innerTabs = new TabControl { Dock = DockStyle.Fill, Font = Theme.FontBase };
-            var daysPage = new TabPage("Journees") { BackColor = Theme.Background };
-            var monthPage = new TabPage("Resume mensuel") { BackColor = Theme.Background };
+            var daysPage = new TabPage("Journées") { BackColor = Theme.Background };
+            var monthPage = new TabPage("Résumé mensuel") { BackColor = Theme.Background };
             innerTabs.TabPages.Add(daysPage);
             innerTabs.TabPages.Add(monthPage);
             innerTabs.SelectedIndexChanged += (s, e) => { if (innerTabs.SelectedTab == monthPage) LoadMonthSummaries(); };
 
-            // --- Sub-tab: Journees (list of closed days) ---
+            // --- Sub-tab: Journées (list of closed days) ---
             var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, ColumnCount = 1, Padding = new Padding(16) };
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-            var title = new Label { Text = "Historique des journees cloturees", Font = Theme.FontHeading, AutoSize = true, Margin = new Padding(0, 0, 0, 10) };
+            var title = new Label { Text = "Historique des journées clôturées", Font = Theme.FontHeading, AutoSize = true, Margin = new Padding(0, 0, 0, 10) };
             root.Controls.Add(title, 0, 0);
 
             var toolbar = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 8) };
@@ -114,10 +114,10 @@ namespace PhotoStudioApp.UI
             var gridPanel = new Panel { Dock = DockStyle.Fill, BackColor = Theme.CardBackground };
             _grid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true };
             Theme.StyleGrid(_grid);
-            _grid.Columns.Add("Date", "Date de cloture");
-            _grid.Columns.Add("ClosedAt", "Cloturee le");
+            _grid.Columns.Add("Date", "Date de clôture");
+            _grid.Columns.Add("ClosedAt", "Clôturée le");
             _grid.Columns.Add("Total", "Revenu");
-            _grid.Columns.Add("Expenses", "Depenses");
+            _grid.Columns.Add("Expenses", "Dépenses");
             _grid.Columns.Add("Net", "Net");
             _grid.Columns.Add("Archive", "Dossier d'archive");
             _grid.CellDoubleClick += (s, e) => OpenSelected();
@@ -126,13 +126,13 @@ namespace PhotoStudioApp.UI
 
             daysPage.Controls.Add(root);
 
-            // --- Sub-tab: Resume mensuel (month summary) ---
+            // --- Sub-tab: Résumé mensuel (month summary) ---
             var monthRoot = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, ColumnCount = 1, Padding = new Padding(16) };
             monthRoot.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             monthRoot.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             monthRoot.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-            var monthTitle = new Label { Text = "Resume des revenus par mois", Font = Theme.FontHeading, AutoSize = true, Margin = new Padding(0, 0, 0, 10) };
+            var monthTitle = new Label { Text = "Résumé des revenus par mois", Font = Theme.FontHeading, AutoSize = true, Margin = new Padding(0, 0, 0, 10) };
             monthRoot.Controls.Add(monthTitle, 0, 0);
 
             var monthToolbar = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 8) };
@@ -153,9 +153,9 @@ namespace PhotoStudioApp.UI
             _monthGrid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true };
             Theme.StyleGrid(_monthGrid);
             _monthGrid.Columns.Add("Month", "Mois");
-            _monthGrid.Columns.Add("Days", "Journees cloturees");
+            _monthGrid.Columns.Add("Days", "Journées clôturées");
             _monthGrid.Columns.Add("Total", "Revenu total du mois");
-            _monthGrid.Columns.Add("Expenses", "Depenses du mois");
+            _monthGrid.Columns.Add("Expenses", "Dépenses du mois");
             _monthGrid.Columns.Add("Net", "Net du mois");
             _monthGrid.CellDoubleClick += (s, e) => OpenSelectedMonth();
             monthGridPanel.Controls.Add(_monthGrid);
@@ -260,8 +260,8 @@ namespace PhotoStudioApp.UI
             if (!AuthGate.RequireAdminPassword(this)) return;
 
             if (MessageBox.Show(
-                $"Retirer la journee du {close.CloseDate} de l'historique ?\n\n" +
-                "Cela supprime uniquement l'entree/le total de l'historique - le dossier " +
+                $"Retirer la journée du {close.CloseDate} de l'historique ?\n\n" +
+                "Cela supprime uniquement l'entrée/le total de l'historique - le dossier " +
                 $"archive sur le disque est CONSERVE :\n{close.ArchiveFolderPath}",
                 "Confirmer la suppression", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
                 return;
@@ -292,7 +292,7 @@ namespace PhotoStudioApp.UI
             if (candidates.Count == 0)
             {
                 MessageBox.Show(
-                    "Toutes les archives existantes sont deja dans le mois en cours - rien a supprimer.",
+                    "Toutes les archives existantes sont déjà dans le mois en cours - rien a supprimer.",
                     "Rien a nettoyer", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
@@ -300,7 +300,7 @@ namespace PhotoStudioApp.UI
             if (!AuthGate.RequireAdminPassword(this)) return;
 
             if (MessageBox.Show(
-                $"{candidates.Count} journee(s) en dehors du mois en cours vont etre retirees " +
+                $"{candidates.Count} journée(s) en dehors du mois en cours vont etre retirees " +
                 "de l'historique (le compte/total seulement - les dossiers archives sur le disque " +
                 "ne sont JAMAIS supprimes, quel que soit le bouton utilise). Seul le mois en cours " +
                 "restera dans l'historique. Continuer ?",
@@ -309,7 +309,7 @@ namespace PhotoStudioApp.UI
 
             int deleted = _cleanupService.DeleteAllExceptCurrentMonth();
             LoadHistory();
-            MessageBox.Show($"{deleted} journee(s) retiree(s) de l'historique (dossiers archives conserves). Seul le mois en cours reste dans l'historique.", "Nettoyage termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show($"{deleted} journée(s) retiree(s) de l'historique (dossiers archives conserves). Seul le mois en cours reste dans l'historique.", "Nettoyage termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void CleanupBtn_Click(object sender, EventArgs e)
@@ -319,7 +319,7 @@ namespace PhotoStudioApp.UI
             {
                 MessageBox.Show(
                     "La duree de conservation n'est pas configuree (0 = desactive).\n" +
-                    "Definissez-la dans l'onglet Parametres pour utiliser ce bouton.",
+                    "Definissez-la dans l'onglet Paramètres pour utiliser ce bouton.",
                     "Nettoyage non configure", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
@@ -336,7 +336,7 @@ namespace PhotoStudioApp.UI
             if (!AuthGate.RequireAdminPassword(this)) return;
 
             if (MessageBox.Show(
-                $"{candidates.Count} journee(s) de plus de {settings.ArchiveRetentionDays} jour(s) vont etre " +
+                $"{candidates.Count} journée(s) de plus de {settings.ArchiveRetentionDays} jour(s) vont etre " +
                 "retirees de l'historique (le compte/total seulement - les dossiers archives sur le disque " +
                 "ne sont JAMAIS supprimes). Continuer ?",
                 "Confirmer le nettoyage", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
@@ -344,7 +344,7 @@ namespace PhotoStudioApp.UI
 
             int deleted = _cleanupService.CleanupOlderThanConfiguredRetention();
             LoadHistory();
-            MessageBox.Show($"{deleted} journee(s) retiree(s) de l'historique (dossiers archives conserves).", "Nettoyage termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show($"{deleted} journée(s) retiree(s) de l'historique (dossiers archives conserves).", "Nettoyage termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void ClearAllBtn_Click(object sender, EventArgs e)
@@ -352,7 +352,7 @@ namespace PhotoStudioApp.UI
             if (!AuthGate.RequireAdminPassword(this)) return;
 
             if (MessageBox.Show(
-                "Ceci va vider DEFINITIVEMENT tout l'historique (tous les comptes/totaux de journees).\n\n" +
+                "Ceci va vider DEFINITIVEMENT tout l'historique (tous les comptes/totaux de journées).\n\n" +
                 "Les dossiers archives sur le disque (les photos elles-memes) ne sont JAMAIS supprimes " +
                 "par cette action, ni par aucune autre action de nettoyage dans l'application - ils " +
                 "resteront intacts sous le dossier d'archive.\n\n" +

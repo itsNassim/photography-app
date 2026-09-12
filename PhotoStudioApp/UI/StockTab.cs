@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Windows.Forms;
 using PhotoStudioApp.Data;
@@ -80,8 +80,8 @@ namespace PhotoStudioApp.UI
             _grid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true };
             Theme.StyleGrid(_grid);
             _grid.Columns.Add("Name", "Nom");
-            _grid.Columns.Add("Category", "Categorie");
-            _grid.Columns.Add("Quantity", "Quantite");
+            _grid.Columns.Add("Category", "Catégorie");
+            _grid.Columns.Add("Quantity", "Quantité");
             _grid.Columns.Add("UnitPrice", "Prix unitaire");
             _grid.Columns.Add("Status", "Statut");
             _grid.RowPrePaint += Grid_RowPrePaint;
@@ -185,7 +185,7 @@ namespace PhotoStudioApp.UI
 
             using (var form = new Form
             {
-                Text = $"Ajuster la quantite - {item.Name}",
+                Text = $"Ajuster la quantité - {item.Name}",
                 Width = 380,
                 Height = 160,
                 FormBorderStyle = FormBorderStyle.FixedDialog,
@@ -195,7 +195,7 @@ namespace PhotoStudioApp.UI
                 Font = Theme.FontBase
             })
             {
-                var label = new Label { Text = $"Quantite actuelle : {item.Quantity}\nSaisissez la variation (+ pour reapprovisionner, - pour retirer) :", AutoSize = true, Left = 16, Top = 14 };
+                var label = new Label { Text = $"Quantité actuelle : {item.Quantity}\nSaisissez la variation (+ pour reapprovisionner, - pour retirer) :", AutoSize = true, Left = 16, Top = 14 };
                 var input = new NumericUpDown { Minimum = -100000, Maximum = 100000, Left = 16, Top = 60, Width = 120 };
                 var okBtn = Theme.MakePrimaryButton("Appliquer");
                 okBtn.Left = 160; okBtn.Top = 58; okBtn.Width = 110;
@@ -241,11 +241,11 @@ namespace PhotoStudioApp.UI
                 try
                 {
                     _importExport.ExportStock(dlg.FileName);
-                    MessageBox.Show("Stock exporte avec succes.", "Termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show("Stock exporté avec succès.", "Termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show("Echec de l'export :\n" + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show("Échec de l'export :\n" + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
         }
@@ -267,14 +267,14 @@ namespace PhotoStudioApp.UI
                     RefreshAll();
                     StockChanged?.Invoke(this, EventArgs.Empty);
 
-                    string msg = $"{result.Added} article(s) ajoute(s), {result.SkippedDuplicates} deja existant(s) ignore(s).";
+                    string msg = $"{result.Added} article(s) ajouté(s), {result.SkippedDuplicates} déjà existant(s) ignoré(s).";
                     if (result.Errors.Count > 0)
-                        msg += $"\n\n{result.Errors.Count} ligne(s) ignoree(s) a cause d'un format invalide.";
+                        msg += $"\n\n{result.Errors.Count} ligne(s) ignorée(s) a cause d'un format invalide.";
                     MessageBox.Show(msg, "Import termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show("Echec de l'import :\n" + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show("Échec de l'import :\n" + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
         }

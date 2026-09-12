@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Printing;
 using System.IO;
@@ -144,7 +144,7 @@ namespace PhotoStudioApp.Services
             y += lineHeight + 6;
             g.DrawString($"Date : {_close.CloseDate}", _bodyFont, Brushes.Black, x, y);
             y += lineHeight;
-            g.DrawString($"Cloture le : {_close.ClosedAt:g}", _bodyFont, Brushes.Black, x, y);
+            g.DrawString($"Clôture le : {_close.ClosedAt:g}", _bodyFont, Brushes.Black, x, y);
             y += lineHeight + 10;
 
             g.DrawLine(Pens.Black, x, y, e.PageBounds.Width - x, y);
@@ -183,7 +183,7 @@ namespace PhotoStudioApp.Services
 
             if (_close.Expenses.Count > 0)
             {
-                g.DrawString("Depenses (achats pour le magasin) :", _bodyFont, Brushes.Black, x, y);
+                g.DrawString("Dépenses (achats pour le magasin) :", _bodyFont, Brushes.Black, x, y);
                 y += lineHeight;
                 foreach (var ex in _close.Expenses)
                 {
@@ -191,7 +191,7 @@ namespace PhotoStudioApp.Services
                     g.DrawString(line, _bodyFont, Brushes.Black, x, y);
                     y += lineHeight;
                 }
-                g.DrawString($"Total des depenses : -{_close.TotalExpenses:0.00}", _bodyFont, Brushes.Black, x, y);
+                g.DrawString($"Total des dépenses : -{_close.TotalExpenses:0.00}", _bodyFont, Brushes.Black, x, y);
                 y += lineHeight + 6;
                 g.DrawLine(Pens.Black, x, y, e.PageBounds.Width - x, y);
                 y += 14;
@@ -213,7 +213,7 @@ namespace PhotoStudioApp.Services
             y += lineHeight + 6;
             g.DrawString($"Mois : {_monthSummary.MonthLabel}", _bodyFont, Brushes.Black, x, y);
             y += lineHeight;
-            g.DrawString($"Journees cloturees : {_monthSummary.DaysClosed}", _bodyFont, Brushes.Black, x, y);
+            g.DrawString($"Journées clôturées : {_monthSummary.DaysClosed}", _bodyFont, Brushes.Black, x, y);
             y += lineHeight + 10;
 
             g.DrawLine(Pens.Black, x, y, e.PageBounds.Width - x, y);
@@ -221,7 +221,7 @@ namespace PhotoStudioApp.Services
 
             foreach (var day in _monthDays)
             {
-                string line = $"{day.CloseDate,-16} revenu {day.GrandTotal,10:0.00}   depenses -{day.TotalExpenses,8:0.00}   net {day.NetTotal,10:0.00}";
+                string line = $"{day.CloseDate,-16} revenu {day.GrandTotal,10:0.00}   dépenses -{day.TotalExpenses,8:0.00}   net {day.NetTotal,10:0.00}";
                 g.DrawString(line, _bodyFont, Brushes.Black, x, y);
                 y += lineHeight;
             }
@@ -231,7 +231,7 @@ namespace PhotoStudioApp.Services
             y += 14;
             g.DrawString($"TOTAL DU MOIS (revenu) : {_monthSummary.TotalRevenue:0.00}", _totalFont, Brushes.Black, x, y);
             y += lineHeight;
-            g.DrawString($"Total des depenses du mois : -{_monthSummary.TotalExpenses:0.00}", _bodyFont, Brushes.Black, x, y);
+            g.DrawString($"Total des dépenses du mois : -{_monthSummary.TotalExpenses:0.00}", _bodyFont, Brushes.Black, x, y);
             y += lineHeight;
             g.DrawString($"TOTAL NET DU MOIS : {_monthSummary.NetRevenue:0.00}", _totalFont, Brushes.Black, x, y);
 

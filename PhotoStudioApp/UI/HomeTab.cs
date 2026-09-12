@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Windows.Forms;
@@ -8,8 +8,8 @@ using PhotoStudioApp.UI.Dialogs;
 
 namespace PhotoStudioApp.UI
 {
-    /// <summary>Accueil / Aujourd'hui : nombre de photos en direct par categorie, prix
-    /// unitaire, charges additionnelles du jour, et le bouton pour cloturer la journee.</summary>
+    /// <summary>Accueil / Aujourd'hui : nombre de photos en direct par catégorie, prix
+    /// unitaire, charges additionnelles du jour, et le bouton pour clôturer la journée.</summary>
     public class HomeTab : UserControl
     {
         public event EventHandler DayClosed;
@@ -62,12 +62,12 @@ namespace PhotoStudioApp.UI
         private void BuildLayout()
         {
             // Scrolling fix: a TableLayoutPanel that is Dock=Fill with Percent rows can't
-            // scroll - on a small window each section (categories/charges/soldes/depenses)
+            // scroll - on a small window each section (categories/charges/soldes/dépenses)
             // just gets squeezed into whatever tiny percentage of space remains, with no way to
             // see the rest. Fix: give each section a fixed, comfortable minimum height instead
             // of a percentage, let the root panel AutoSize to its true total height, and put it
             // inside an outer Panel that actually scrolls when that total exceeds the window -
-            // the same pattern used for the Parametres tab's scroll fix.
+            // the same pattern used for the Paramètres tab's scroll fix.
             var scrollPanel = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = Theme.Background };
 
             var root = new TableLayoutPanel
@@ -103,7 +103,7 @@ namespace PhotoStudioApp.UI
             var categoryPanel = new Panel { Dock = DockStyle.Fill, BackColor = Theme.CardBackground, Padding = new Padding(1) };
             _categoryGrid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true };
             Theme.StyleGrid(_categoryGrid);
-            _categoryGrid.Columns.Add("Category", "Categorie");
+            _categoryGrid.Columns.Add("Category", "Catégorie");
             _categoryGrid.Columns.Add("Count", "Photos");
             _categoryGrid.Columns.Add("Price", "Prix unitaire");
             categoryPanel.Controls.Add(_categoryGrid);
@@ -175,13 +175,13 @@ namespace PhotoStudioApp.UI
             pendingOuter.Controls.Add(pendingPanel, 0, 1);
             root.Controls.Add(pendingOuter, 0, 3);
 
-            // --- Depenses du jour (achats pour le magasin) ---
+            // --- Dépenses du jour (achats pour le magasin) ---
             var expensesOuter = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 1 };
             expensesOuter.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             expensesOuter.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
             var expensesHeader = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill };
-            var expensesTitle = new Label { Text = "Depenses du jour (achats pour le magasin)", Font = Theme.FontSubheading, AutoSize = true, Margin = new Padding(0, 6, 20, 6) };
+            var expensesTitle = new Label { Text = "Dépenses du jour (achats pour le magasin)", Font = Theme.FontSubheading, AutoSize = true, Margin = new Padding(0, 6, 20, 6) };
             var addExpenseBtn = Theme.MakePrimaryButton("Ajouter");
             addExpenseBtn.Width = 110;
             addExpenseBtn.Click += AddExpenseBtn_Click;
@@ -208,9 +208,9 @@ namespace PhotoStudioApp.UI
             expensesOuter.Controls.Add(expensesPanel, 0, 1);
             root.Controls.Add(expensesOuter, 0, 4);
 
-            // --- Pied de page : bouton Cloturer la journee (pas d'apercu de total, sur demande) ---
+            // --- Pied de page : bouton Clôturer la journée (pas d'apercu de total, sur demande) ---
             var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Margin = new Padding(0, 12, 0, 0) };
-            var closeDayBtn = Theme.MakePrimaryButton("Cloturer la journee");
+            var closeDayBtn = Theme.MakePrimaryButton("Clôturer la journée");
             closeDayBtn.Image = IconGlyphs.Lock(18);
             closeDayBtn.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
             closeDayBtn.TextImageRelation = TextImageRelation.ImageBeforeText;
@@ -317,7 +317,7 @@ namespace PhotoStudioApp.UI
             }
         }
 
-        /// <summary>Refreshes the "Depenses du jour" grid - money spent (e.g. a worker buying
+        /// <summary>Refreshes the "Dépenses du jour" grid - money spent (e.g. a worker buying
         /// supplies for the studio), tracked separately from revenue and subtracted at close
         /// time to produce the day's net total.</summary>
         private void RefreshExpenses()
@@ -373,7 +373,7 @@ namespace PhotoStudioApp.UI
             if (_expensesGrid.CurrentRow?.Tag == null) return;
             int id = (int)_expensesGrid.CurrentRow.Tag;
 
-            if (MessageBox.Show("Supprimer cette depense ?", "Confirmer", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+            if (MessageBox.Show("Supprimer cette dépense ?", "Confirmer", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
                 return;
 
             _expenseRepo.Delete(id);
@@ -505,7 +505,7 @@ namespace PhotoStudioApp.UI
             {
                 if (dlg.ShowDialog() == DialogResult.OK)
                 {
-                    // Restitue toute quantite de stock precedemment consommee avant d'appliquer la nouvelle.
+                    // Restitue toute quantité de stock precedemment consommee avant d'appliquer la nouvelle.
                     if (existing.LinkedStockItemId.HasValue && existing.Quantity.HasValue)
                         _stockRepo.AdjustQuantity(existing.LinkedStockItemId.Value, existing.Quantity.Value);
 
@@ -545,7 +545,7 @@ namespace PhotoStudioApp.UI
             var settings = _settingsRepo.LoadAll();
             if (string.IsNullOrEmpty(settings.PasswordHash))
             {
-                MessageBox.Show("Aucun mot de passe de cloture n'est defini. Definissez-en un dans l'onglet Parametres.",
+                MessageBox.Show("Aucun mot de passe de clôture n'est defini. Definissez-en un dans l'onglet Paramètres.",
                     "Mot de passe requis", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
@@ -557,8 +557,8 @@ namespace PhotoStudioApp.UI
             }
 
             if (MessageBox.Show(
-                "Cette action va archiver les photos du jour, cloturer la comptabilite et demarrer une nouvelle journee. Continuer ?",
-                "Confirmer la cloture", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                "Cette action va archiver les photos du jour, clôturer la comptabilite et demarrer une nouvelle journée. Continuer ?",
+                "Confirmer la clôture", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
                 return;
 
             try
@@ -570,7 +570,7 @@ namespace PhotoStudioApp.UI
                 }
                 catch (EmptyDayException ex)
                 {
-                    if (MessageBox.Show(ex.Message, "Journee vide", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                    if (MessageBox.Show(ex.Message, "Journée vide", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
                         return;
                     close = _closingService.CloseDay(confirmedEmptyDay: true);
                 }
@@ -583,11 +583,11 @@ namespace PhotoStudioApp.UI
             }
             catch (CloseDayException ex)
             {
-                MessageBox.Show(ex.Message, "Impossible de cloturer la journee", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(ex.Message, "Impossible de clôturer la journée", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Une erreur inattendue est survenue lors de la cloture :\n" + ex.Message,
+                MessageBox.Show("Une erreur inattendue est survenue lors de la clôture :\n" + ex.Message,
                     "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }

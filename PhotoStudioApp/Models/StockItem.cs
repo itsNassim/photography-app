@@ -1,4 +1,4 @@
-namespace PhotoStudioApp.Models
+﻿namespace PhotoStudioApp.Models
 {
     public class StockItem
     {

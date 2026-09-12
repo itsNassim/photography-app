@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace PhotoStudioApp.Models
@@ -57,7 +57,7 @@ namespace PhotoStudioApp.Models
     }
 
     /// <summary>Aggregated revenue for one calendar month, built from every DailyClose whose
-    /// CloseDate falls in that month - used by the "Resume mensuel" sub-tab in History/Archive.</summary>
+    /// CloseDate falls in that month - used by the "Résumé mensuel" sub-tab in History/Archive.</summary>
     public class MonthSummary
     {
         public string YearMonth { get; set; } // "yyyy-MM"

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Windows.Forms;
 using PhotoStudioApp.Data;
@@ -68,7 +68,7 @@ namespace PhotoStudioApp
             catch (Exception ex)
             {
                 MessageBox.Show(
-                    "Impossible de creer ou d'ouvrir la base de donnees locale :\n" + ex.Message,
+                    "Impossible de créer ou d'ouvrir la base de données locale :\n" + ex.Message,
                     "Erreur au demarrage", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }

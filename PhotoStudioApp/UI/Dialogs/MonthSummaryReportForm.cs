@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Windows.Forms;
@@ -7,7 +7,7 @@ using PhotoStudioApp.Services;
 
 namespace PhotoStudioApp.UI.Dialogs
 {
-    /// <summary>Shows the printable "Resume mensuel" (month summary) report: total revenue for
+    /// <summary>Shows the printable "Résumé mensuel" (month summary) report: total revenue for
     /// the month plus the day-by-day breakdown that makes it up. Mirrors BreakdownReportForm's
     /// layout/behavior (view/print/export) for the daily report.</summary>
     public class MonthSummaryReportForm : Form
@@ -81,15 +81,15 @@ namespace PhotoStudioApp.UI.Dialogs
             var sb = new StringBuilder();
             sb.AppendLine("STUDIO PHOTO - RAPPORT MENSUEL");
             sb.AppendLine($"Mois : {_summary.MonthLabel}");
-            sb.AppendLine($"Journees cloturees : {_summary.DaysClosed}");
+            sb.AppendLine($"Journées clôturées : {_summary.DaysClosed}");
             sb.AppendLine(new string('-', 46));
 
             foreach (var day in _days)
-                sb.AppendLine($"{day.CloseDate,-14} revenu {day.GrandTotal,9:0.00}  depenses -{day.TotalExpenses,8:0.00}  net {day.NetTotal,9:0.00}");
+                sb.AppendLine($"{day.CloseDate,-14} revenu {day.GrandTotal,9:0.00}  dépenses -{day.TotalExpenses,8:0.00}  net {day.NetTotal,9:0.00}");
 
             sb.AppendLine(new string('-', 46));
             sb.AppendLine($"TOTAL DU MOIS (revenu) : {_summary.TotalRevenue:0.00}");
-            sb.AppendLine($"Total des depenses du mois : -{_summary.TotalExpenses:0.00}");
+            sb.AppendLine($"Total des dépenses du mois : -{_summary.TotalExpenses:0.00}");
             sb.AppendLine($"TOTAL NET DU MOIS : {_summary.NetRevenue:0.00}");
             return sb.ToString();
         }
@@ -119,7 +119,7 @@ namespace PhotoStudioApp.UI.Dialogs
                 try
                 {
                     _printService.ExportMonthToPdf(_summary, _days, dlg.FileName);
-                    MessageBox.Show("PDF exporte avec succes.", "Termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show("PDF exporté avec succès.", "Termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception ex)
                 {

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data.SQLite;
 using System.IO;
@@ -130,7 +130,20 @@ namespace PhotoStudioApp.Data
             AddColumnIfMissing("CustomCharges", "LinkedCategoryId", "INTEGER REFERENCES Categories(Id)");
             AddColumnIfMissing("DailyCloseLineItems", "PurgedCount", "INTEGER NOT NULL DEFAULT 0");
             AddColumnIfMissing("DailyCloses", "TotalExpenses", "REAL NOT NULL DEFAULT 0");
-            AddColumnIfMissing("DailyCloses", "NetTotal", "REAL NOT NULL DEFAULT 0");
+            bool netTotalJustAdded = AddColumnIfMissing("DailyCloses", "NetTotal", "REAL NOT NULL DEFAULT 0");
+            if (netTotalJustAdded)
+            {
+                // BUG FIX: every day closed before expense-tracking existed got NetTotal=0 from
+                // the column's DEFAULT, which is wrong - those days genuinely had zero expenses,
+                // so their real net total is just their revenue (GrandTotal). Without this
+                // backfill, "TOTAL NET DU MOIS" for any month containing pre-existing closed
+                // days came out far too low (summing a bunch of incorrect 0s instead of their
+                // actual revenue). Runs exactly once, only in the same migration step that
+                // introduces the column - never overwrites a NetTotal computed normally later.
+                using (var conn = Db.OpenConnection())
+                using (var cmd = new SQLiteCommand("UPDATE DailyCloses SET NetTotal = GrandTotal - TotalExpenses;", conn))
+                    cmd.ExecuteNonQuery();
+            }
 
             // Older databases created Categories.FolderRelativePath as NOT NULL, back when
             // every category had a folder. SQLite can't just drop a NOT NULL constraint with
@@ -227,7 +240,11 @@ namespace PhotoStudioApp.Data
             }
         }
 
-        private static void AddColumnIfMissing(string table, string column, string columnDefSql)
+        /// <summary>Adds the column if it doesn't already exist. Returns true only when the
+        /// column was just added by this call (false if it already existed) - callers use this
+        /// to run a one-time backfill exactly once, right when a column is introduced, rather
+        /// than every time the app starts.</summary>
+        private static bool AddColumnIfMissing(string table, string column, string columnDefSql)
         {
             using (var conn = Db.OpenConnection())
             {
@@ -250,7 +267,9 @@ namespace PhotoStudioApp.Data
                 {
                     using (var cmd = new SQLiteCommand($"ALTER TABLE {table} ADD COLUMN {column} {columnDefSql};", conn))
                         cmd.ExecuteNonQuery();
+                    return true;
                 }
+                return false;
             }
         }
 

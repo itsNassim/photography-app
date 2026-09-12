@@ -1,9 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Forms;
 using PhotoStudioApp.Data;
 using PhotoStudioApp.Models;
+using PhotoStudioApp.UI.Controls;
 
 namespace PhotoStudioApp.UI.Dialogs
 {
@@ -25,7 +26,7 @@ namespace PhotoStudioApp.UI.Dialogs
         private readonly TextBox _descBox;
         private readonly NumericUpDown _amountBox;
         private readonly NumericUpDown _paidAmountBox;
-        private readonly ComboBox _linkCombo;
+        private readonly SearchableComboBox _linkCombo;
         private readonly NumericUpDown _qtyBox;
         private readonly CheckBox _autoAmountCheck;
         private readonly StockRepository _stockRepo = new StockRepository();
@@ -51,26 +52,18 @@ namespace PhotoStudioApp.UI.Dialogs
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
-            // Editable + autocomplete instead of a separate search field: typing directly into
-            // this dropdown filters/suggests matching stock items, categories, and pending
-            // balances inline (native Windows autocomplete popup), while the dropdown arrow
-            // still shows the complete, unfiltered list. See RepopulateCombo for how the
-            // suggestion list is kept in sync with the items.
-            layout.Controls.Add(new Label { Text = "Categorie, article de stock,\nou solde en attente (tapez pour\nrechercher, ou choisissez) :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 0);
-            _linkCombo = new ComboBox
-            {
-                Width = 270,
-                DropDownStyle = ComboBoxStyle.DropDown,
-                AutoCompleteMode = AutoCompleteMode.SuggestAppend,
-                AutoCompleteSource = AutoCompleteSource.CustomSource
-            };
+            // SearchableComboBox instead of a plain ComboBox: its dropdown has its own search
+            // box built into it (at the top of the popup list), rather than relying on a
+            // separate field or on OS-level autocomplete in the main text area.
+            layout.Controls.Add(new Label { Text = "Catégorie, article de stock,\nou solde en attente :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 0);
+            _linkCombo = new SearchableComboBox { Width = 270 };
             layout.Controls.Add(_linkCombo, 1, 0);
 
             layout.Controls.Add(new Label { Text = "Description :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 1);
             _descBox = new TextBox { Width = 270, Text = existing?.Description ?? "" };
             layout.Controls.Add(_descBox, 1, 1);
 
-            layout.Controls.Add(new Label { Text = "Quantite :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 2);
+            layout.Controls.Add(new Label { Text = "Quantité :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 2);
             _qtyBox = new NumericUpDown { Width = 100, Minimum = 0, Maximum = 100000, Enabled = false, Value = existing?.Quantity ?? 0 };
             _qtyBox.ValueChanged += (s, e) => RecomputeAutoAmount();
             layout.Controls.Add(_qtyBox, 1, 2);
@@ -85,7 +78,7 @@ namespace PhotoStudioApp.UI.Dialogs
             _amountBox.ValueChanged += (s, e) => SyncPaidToAmountIfUnlinkedDefault();
             layout.Controls.Add(_amountBox, 1, 4);
 
-            // "Montant paye maintenant" comes LAST (after Montant/quantite/etc. are settled) so
+            // "Montant paye maintenant" comes LAST (after Montant/quantité/etc. are settled) so
             // filling in the rest of the form never overwrites a partial-payment amount the user
             // already typed here - see SyncPaidToAmountIfUnlinkedDefault.
             layout.Controls.Add(new Label { Text = "Montant paye maintenant\n(si different, le reste devient\nun solde en attente) :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 5);
@@ -112,24 +105,26 @@ namespace PhotoStudioApp.UI.Dialogs
             // exists - this used to run right after _linkCombo was created, before those fields
             // existed yet, which threw a NullReferenceException the instant the dialog opened.
             BuildLinkOptions();
+            _linkCombo.SelectedItemChanged += LinkCombo_SelectedIndexChanged;
+            _linkCombo.SelectedItem = _allOptions[0];
 
             if (existing?.LinkedStockItemId != null)
             {
-                int idx = FindOptionIndex(o => o.Stock != null && o.Stock.Id == existing.LinkedStockItemId.Value);
-                if (idx >= 0)
+                var opt = _allOptions.FirstOrDefault(o => o.Stock != null && o.Stock.Id == existing.LinkedStockItemId.Value);
+                if (opt != null)
                 {
                     _restoringExisting = true;
-                    _linkCombo.SelectedIndex = idx;
+                    _linkCombo.SelectedItem = opt;
                     _restoringExisting = false;
                 }
             }
             else if (existing?.LinkedCategoryId != null)
             {
-                int idx = FindOptionIndex(o => o.ServiceCategory != null && o.ServiceCategory.Id == existing.LinkedCategoryId.Value);
-                if (idx >= 0)
+                var opt = _allOptions.FirstOrDefault(o => o.ServiceCategory != null && o.ServiceCategory.Id == existing.LinkedCategoryId.Value);
+                if (opt != null)
                 {
                     _restoringExisting = true;
-                    _linkCombo.SelectedIndex = idx;
+                    _linkCombo.SelectedItem = opt;
                     _restoringExisting = false;
                 }
             }
@@ -139,23 +134,15 @@ namespace PhotoStudioApp.UI.Dialogs
                 // toward it - used by the Home tab's "Soldes en attente" section's "Payer"
                 // button. Not wrapped in _restoringExisting: we WANT the normal auto-fill
                 // (description + amount = remaining balance) that a fresh selection triggers.
-                int idx = FindOptionIndex(o => o.Balance != null && o.Balance.Id == preselectedBalance.Id);
-                if (idx >= 0)
-                    _linkCombo.SelectedIndex = idx;
+                var opt = _allOptions.FirstOrDefault(o => o.Balance != null && o.Balance.Id == preselectedBalance.Id);
+                if (opt != null)
+                    _linkCombo.SelectedItem = opt;
             }
 
             // Restore the saved description LAST, after any selection-restore above may have
             // touched the textbox, so an edited charge keeps exactly what was saved.
             if (existing != null)
                 _descBox.Text = existing.Description ?? "";
-        }
-
-        private int FindOptionIndex(Func<LinkOption, bool> predicate)
-        {
-            for (int i = 0; i < _linkCombo.Items.Count; i++)
-                if (_linkCombo.Items[i] is LinkOption o && predicate(o))
-                    return i;
-            return -1;
         }
 
         private void BuildLinkOptions()
@@ -185,39 +172,14 @@ namespace PhotoStudioApp.UI.Dialogs
             var serviceCategories = _categoryRepo.GetActiveServiceCategories();
             foreach (var cat in serviceCategories)
             {
-                string label = $"[Categorie] {cat.Name}  ({cat.CurrentPrice:0.00} / unite)";
+                string label = $"[Catégorie] {cat.Name}  ({cat.CurrentPrice:0.00} / unité)";
                 _allOptions.Add(new LinkOption { Label = label, ServiceCategory = cat });
             }
 
-            RepopulateCombo(_allOptions);
-        }
-
-        private void RepopulateCombo(List<LinkOption> options)
-        {
-            var previouslySelected = SelectedOption();
-            _linkCombo.SelectedIndexChanged -= LinkCombo_SelectedIndexChanged;
-            _linkCombo.Items.Clear();
-            foreach (var o in options)
-                _linkCombo.Items.Add(o);
-
-            // Powers the native "type to filter/suggest" popup on the now-editable dropdown -
-            // this is what replaced the old separate search TextBox: typing here filters
-            // suggestions inline, while clicking the dropdown arrow still shows everything.
-            var suggestions = new AutoCompleteStringCollection();
-            suggestions.AddRange(options.Select(o => o.Label).ToArray());
-            _linkCombo.AutoCompleteCustomSource = suggestions;
-
-            int idx = 0;
-            if (previouslySelected != null)
-            {
-                for (int i = 0; i < options.Count; i++)
-                {
-                    if (ReferenceEquals(options[i], previouslySelected)) { idx = i; break; }
-                }
-            }
-            _linkCombo.SelectedIndexChanged += LinkCombo_SelectedIndexChanged;
-            if (_linkCombo.Items.Count > 0)
-                _linkCombo.SelectedIndex = idx;
+            // The dropdown's own embedded search box (see SearchableComboBox) filters this list
+            // live by each option's Label - which already includes the stock category name in
+            // brackets, so searching by category works without any extra plumbing here.
+            _linkCombo.SetItems(_allOptions.Cast<object>());
         }
 
         private LinkOption SelectedOption() => _linkCombo.SelectedItem as LinkOption;
@@ -339,7 +301,7 @@ namespace PhotoStudioApp.UI.Dialogs
             {
                 string msg = option?.Balance != null
                     ? $"{paidNow:0.00} paye maintenant sur ce solde - il restera {shortfall:0.00} en attente. Continuer ?"
-                    : $"Le client paye {paidNow:0.00} sur un total de {total:0.00} - un solde en attente de {shortfall:0.00} sera cree pour \"{_descBox.Text.Trim()}\". Continuer ?";
+                    : $"Le client paye {paidNow:0.00} sur un total de {total:0.00} - un solde en attente de {shortfall:0.00} sera créé pour \"{_descBox.Text.Trim()}\". Continuer ?";
                 if (MessageBox.Show(msg, "Paiement partiel", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
                     return;
             }

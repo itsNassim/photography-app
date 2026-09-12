@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using PhotoStudioApp.Data;
@@ -41,9 +41,9 @@ namespace PhotoStudioApp.Services
             var settings = _settingsRepo.LoadAll();
 
             if (string.IsNullOrWhiteSpace(settings.StudioRootPath))
-                throw new CloseDayException("Le dossier du studio n'est pas configure. Configurez-le dans Parametres.");
+                throw new CloseDayException("Le dossier du studio n'est pas configure. Configurez-le dans Paramètres.");
             if (string.IsNullOrWhiteSpace(settings.ArchiveRootPath))
-                throw new CloseDayException("Le dossier d'archive n'est pas configure. Configurez-le dans Parametres.");
+                throw new CloseDayException("Le dossier d'archive n'est pas configure. Configurez-le dans Paramètres.");
             if (!_folders.IsPathReachable(settings.ArchiveRootPath))
                 throw new CloseDayException($"Le dossier d'archive est inaccessible :\n{settings.ArchiveRootPath}\n\nVerifiez le chemin (disque/reseau) puis reessayez.");
 
@@ -123,7 +123,7 @@ namespace PhotoStudioApp.Services
             {
                 throw new EmptyDayException(
                     "Aucune photo trouvee dans les dossiers de categories, aucune charge additionnelle, " +
-                    "et aucune depense aujourd'hui. Cloturer quand meme la journee ?");
+                    "et aucune dépense aujourd'hui. Clôturer quand meme la journée ?");
             }
 
             // 2) NOW move each category's (already-purged) photos into the working folder.

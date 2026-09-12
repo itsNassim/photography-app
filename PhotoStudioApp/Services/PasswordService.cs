@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Security.Cryptography;
 
 namespace PhotoStudioApp.Services
@@ -48,7 +48,7 @@ namespace PhotoStudioApp.Services
         // password gate on a studio's own PC, not a public-facing service). IMPORTANT: if
         // this app was ever run before this change with a password already set, that old
         // hash was computed with SHA-256 and will no longer verify against this SHA-1-based
-        // version - use "Definir le mot de passe" in Parametres once after updating to set
+        // version - use "Definir le mot de passe" in Paramètres once after updating to set
         // a fresh password if that happens.
         private static byte[] DeriveBytes(string password, byte[] salt)
         {

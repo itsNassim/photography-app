@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows.Forms;
 using PhotoStudioApp.Models;
 
@@ -15,7 +15,7 @@ namespace PhotoStudioApp.UI.Dialogs
 
         public AddExpenseDialog(Expense existing = null)
         {
-            Text = existing == null ? "Ajouter une depense" : "Modifier la depense";
+            Text = existing == null ? "Ajouter une dépense" : "Modifier la dépense";
             Width = 420;
             Height = 240;
             FormBorderStyle = FormBorderStyle.FixedDialog;

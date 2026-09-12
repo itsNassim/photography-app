@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows.Forms;
 using PhotoStudioApp.Data;
 using PhotoStudioApp.Services;
@@ -29,7 +29,7 @@ namespace PhotoStudioApp.UI.Dialogs
             Font = Theme.FontBase;
             BackColor = Theme.CardBackground;
 
-            var label = new Label { Text = "Cette action est protegee.\nEntrez le mot de passe administrateur pour continuer :", AutoSize = true, Left = 20, Top = 16 };
+            var label = new Label { Text = "Cette action est protégée.\nEntrez le mot de passe administrateur pour continuer :", AutoSize = true, Left = 20, Top = 16 };
             _pwdBox = new TextBox { Left = 20, Top = 70, Width = 340, UseSystemPasswordChar = true, Font = Theme.FontBase };
             _errorLabel = new Label { Left = 20, Top = 98, Width = 340, ForeColor = Theme.Warning, AutoSize = true };
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data.SQLite;
 using PhotoStudioApp.Models;
@@ -184,7 +184,7 @@ namespace PhotoStudioApp.Data
         }
 
         /// <summary>Aggregates every closed day by calendar month (year+month of CloseDate),
-        /// most recent month first - powers the "Resume mensuel" sub-tab.</summary>
+        /// most recent month first - powers the "Résumé mensuel" sub-tab.</summary>
         public List<MonthSummary> GetMonthlySummaries()
         {
             var list = new List<MonthSummary>();

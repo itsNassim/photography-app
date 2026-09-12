@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using System.Drawing.Drawing2D;
 
 namespace PhotoStudioApp.UI
@@ -9,7 +9,7 @@ namespace PhotoStudioApp.UI
     /// version since they don't depend on any particular font being installed.</summary>
     public static class IconGlyphs
     {
-        /// <summary>Padlock icon (used for "Cloturer"/locked-history buttons).</summary>
+        /// <summary>Padlock icon (used for "Clôturer"/locked-history buttons).</summary>
         public static Bitmap Lock(int size, Color? color = null)
         {
             var c = color ?? Color.White;

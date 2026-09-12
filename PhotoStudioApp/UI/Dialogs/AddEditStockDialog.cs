@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows.Forms;
 using PhotoStudioApp.Models;
 
@@ -34,11 +34,11 @@ namespace PhotoStudioApp.UI.Dialogs
             _nameBox = new TextBox { Width = 220, Text = existing?.Name ?? "" };
             layout.Controls.Add(_nameBox, 1, 0);
 
-            layout.Controls.Add(new Label { Text = "Categorie (optionnel) :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 1);
+            layout.Controls.Add(new Label { Text = "Catégorie (optionnel) :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 1);
             _categoryBox = new TextBox { Width = 220, Text = existing?.Category ?? "" };
             layout.Controls.Add(_categoryBox, 1, 1);
 
-            layout.Controls.Add(new Label { Text = "Quantite :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 2);
+            layout.Controls.Add(new Label { Text = "Quantité :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 2);
             _qtyBox = new NumericUpDown { Width = 120, Minimum = 0, Maximum = 1000000, Value = existing?.Quantity ?? 0 };
             layout.Controls.Add(_qtyBox, 1, 2);
 

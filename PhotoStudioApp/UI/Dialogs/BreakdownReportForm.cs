@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Text;
 using System.Windows.Forms;
 using PhotoStudioApp.Models;
@@ -75,7 +75,7 @@ namespace PhotoStudioApp.UI.Dialogs
             var sb = new StringBuilder();
             sb.AppendLine("STUDIO PHOTO - RAPPORT DU JOUR");
             sb.AppendLine($"Date : {_close.CloseDate}");
-            sb.AppendLine($"Cloture le : {_close.ClosedAt:g}");
+            sb.AppendLine($"Clôture le : {_close.ClosedAt:g}");
             sb.AppendLine(new string('-', 46));
 
             foreach (var li in _close.LineItems)
@@ -99,10 +99,10 @@ namespace PhotoStudioApp.UI.Dialogs
             if (_close.Expenses.Count > 0)
             {
                 sb.AppendLine();
-                sb.AppendLine("Depenses (achats pour le magasin) :");
+                sb.AppendLine("Dépenses (achats pour le magasin) :");
                 foreach (var ex in _close.Expenses)
                     sb.AppendLine($"  {ex.Description,-30} = -{ex.Amount,9:0.00}");
-                sb.AppendLine($"Total des depenses : -{_close.TotalExpenses:0.00}");
+                sb.AppendLine($"Total des dépenses : -{_close.TotalExpenses:0.00}");
                 sb.AppendLine(new string('-', 46));
             }
 
@@ -135,7 +135,7 @@ namespace PhotoStudioApp.UI.Dialogs
                 try
                 {
                     _printService.ExportToPdf(_close, dlg.FileName);
-                    MessageBox.Show("PDF exporte avec succes.", "Termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show("PDF exporté avec succès.", "Termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception ex)
                 {

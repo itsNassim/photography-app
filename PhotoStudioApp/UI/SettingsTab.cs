@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Windows.Forms;
 using PhotoStudioApp.Data;
@@ -60,7 +60,7 @@ namespace PhotoStudioApp.UI
             // Scrolling fix: a TableLayoutPanel that is BOTH Dock=Fill AND AutoScroll=true can't
             // compute a scrollable content size correctly - Dock=Fill clamps it to the visible
             // client area, so content taller than the window gets clipped instead of scrolled
-            // (this is what cut off the bottom of the Parametres page). The fix is to separate
+            // (this is what cut off the bottom of the Paramètres page). The fix is to separate
             // the two roles: an outer Panel does the scrolling (Dock=Fill, AutoScroll=true), and
             // the actual content is a TableLayoutPanel that AutoSizes to its real full height and
             // docks to Top (so it only takes the width of the scroll panel, not a fixed fill).
@@ -76,7 +76,7 @@ namespace PhotoStudioApp.UI
             };
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-            var title = new Label { Text = "Parametres", Font = Theme.FontHeading, AutoSize = true, Margin = new Padding(0, 0, 0, 14) };
+            var title = new Label { Text = "Paramètres", Font = Theme.FontHeading, AutoSize = true, Margin = new Padding(0, 0, 0, 14) };
             root.Controls.Add(title);
 
             var card = new TableLayoutPanel
@@ -102,7 +102,7 @@ namespace PhotoStudioApp.UI
             card.Controls.Add(browseStudio, 2, row);
             row++;
 
-            AddLabel(card, "Dossier d'archive\n(contient les dossiers d'annees) :", row);
+            AddLabel(card, "Dossier d'archive\n(contient les dossiers d'années) :", row);
             _archivePathBox = new TextBox { Width = 380, Font = Theme.FontBase };
             card.Controls.Add(_archivePathBox, 1, row);
             var browseArchive = Theme.MakeSecondaryButton("Parcourir...");
@@ -117,14 +117,14 @@ namespace PhotoStudioApp.UI
             card.Controls.Add(new Label { Text = "ex. dd MMMM -> 07 septembre", AutoSize = true, ForeColor = System.Drawing.Color.Gray, Margin = new Padding(3, 8, 0, 0) }, 2, row);
             row++;
 
-            AddLabel(card, "Jours de fermeture\n(ignores pour le jour suivant) :", row);
+            AddLabel(card, "Jours de fermeture\n(ignorés pour le jour suivant) :", row);
             _closedDaysList = new CheckedListBox { Width = 200, Height = 150, Font = Theme.FontBase, CheckOnClick = true };
             foreach (var d in FrenchWeekdays)
                 _closedDaysList.Items.Add(d.Fr);
             card.Controls.Add(_closedDaysList, 1, row);
             row++;
 
-            AddLabel(card, "Prefixes de fichiers a supprimer\na la cloture (ex. \"re\") :", row);
+            AddLabel(card, "Prefixes de fichiers a supprimer\na la clôture (ex. \"re\") :", row);
             var prefixPanel = new TableLayoutPanel { ColumnCount = 1, AutoSize = true };
             prefixPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             prefixPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -145,7 +145,7 @@ namespace PhotoStudioApp.UI
             card.Controls.Add(prefixPanel, 1, row);
             card.Controls.Add(new Label
             {
-                Text = "Tout fichier dont le nom commence par l'un\nde ces prefixes est supprime avant le\ncomptage, dans chaque dossier de categorie.",
+                Text = "Tout fichier dont le nom commence par l'un\nde ces prefixes est supprime avant le\ncomptage, dans chaque dossier de catégorie.",
                 AutoSize = true, ForeColor = System.Drawing.Color.Gray, Margin = new Padding(3, 8, 0, 0)
             }, 2, row);
             row++;
@@ -168,7 +168,7 @@ namespace PhotoStudioApp.UI
             card.Controls.Add(_maxAttemptsBox, 1, row);
             row++;
 
-            AddLabel(card, "Mot de passe administrateur\n(cloture, Stock/Categories, Historique) :", row);
+            AddLabel(card, "Mot de passe administrateur\n(clôture, Stock/Catégories, Historique) :", row);
             var pwdPanel = new FlowLayoutPanel { AutoSize = true };
             _passwordStatusLabel = new Label { AutoSize = true, Margin = new Padding(0, 8, 14, 0) };
             var setPwdBtn = Theme.MakeSecondaryButton("Definir / Changer");
@@ -179,7 +179,7 @@ namespace PhotoStudioApp.UI
             card.Controls.Add(pwdPanel, 1, row);
             row++;
 
-            AddLabel(card, "Date de travail actuelle\n(protege par mot de passe) :", row);
+            AddLabel(card, "Date de travail actuelle\n(protégé par mot de passe) :", row);
             var datePanel = new FlowLayoutPanel { AutoSize = true };
             _currentWorkDatePicker = new DateTimePicker { Width = 150, Format = DateTimePickerFormat.Short, Font = Theme.FontBase };
             var changeDateBtn = Theme.MakeSecondaryButton("Changer la date");
@@ -202,7 +202,7 @@ namespace PhotoStudioApp.UI
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.Controls.Add(card);
 
-            var saveBtn = Theme.MakePrimaryButton("Enregistrer les parametres");
+            var saveBtn = Theme.MakePrimaryButton("Enregistrer les paramètres");
             saveBtn.Width = 220;
             saveBtn.Margin = new Padding(0, 16, 0, 24);
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -228,7 +228,7 @@ namespace PhotoStudioApp.UI
             {
                 if (string.Equals(existing.ToString(), prefix, StringComparison.OrdinalIgnoreCase))
                 {
-                    MessageBox.Show("Ce prefixe est deja dans la liste.", "Deja present", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show("Ce prefixe est déjà dans la liste.", "Deja present", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
             }
@@ -301,7 +301,7 @@ namespace PhotoStudioApp.UI
 
             if (newDate == oldDate)
             {
-                MessageBox.Show("C'est deja la date de travail actuelle.", "Aucun changement", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("C'est déjà la date de travail actuelle.", "Aucun changement", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
@@ -329,7 +329,7 @@ namespace PhotoStudioApp.UI
                     if (System.IO.Directory.Exists(newFolderAbs) && !string.Equals(oldFolderAbs, newFolderAbs, StringComparison.OrdinalIgnoreCase))
                     {
                         MessageBox.Show(
-                            $"Un dossier nomme \"{newFolderName}\" existe deja dans le studio - impossible de renommer sans ecraser son contenu.\n\n" +
+                            $"Un dossier nomme \"{newFolderName}\" existe déjà dans le studio - impossible de renommer sans ecraser son contenu.\n\n" +
                             "Renommez ou deplacez ce dossier manuellement avant de reessayer.",
                             "Impossible de renommer", MessageBoxButtons.OK, MessageBoxIcon.Error);
                         return;
@@ -344,7 +344,7 @@ namespace PhotoStudioApp.UI
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Impossible de renommer/creer le dossier du jour :\n" + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Impossible de renommer/créer le dossier du jour :\n" + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
@@ -410,12 +410,12 @@ namespace PhotoStudioApp.UI
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Impossible de creer/acceder au dossier du studio :\n" + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Impossible de créer/acceder au dossier du studio :\n" + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
             _repo.SaveAll(s);
-            MessageBox.Show("Parametres enregistres.", "Termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show("Paramètres enregistres.", "Termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
             SettingsSaved?.Invoke(this, EventArgs.Empty);
         }
     }

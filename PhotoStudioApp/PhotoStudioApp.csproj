@@ -126,6 +126,7 @@
     <Compile Include="Services\ImportExportService.cs" />
     <Compile Include="UI\Theme.cs" />
     <Compile Include="UI\IconGlyphs.cs" />
+    <Compile Include="UI\Controls\SearchableComboBox.cs" />
     <Compile Include="UI\AuthGate.cs" />
     <Compile Include="UI\MainForm.cs" />
     <Compile Include="UI\HomeTab.cs" />

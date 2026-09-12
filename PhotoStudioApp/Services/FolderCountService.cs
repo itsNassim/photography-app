@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -110,7 +110,7 @@ namespace PhotoStudioApp.Services
         public void MoveDirectory(string sourceDir, string destDir)
         {
             if (Directory.Exists(destDir))
-                throw new IOException($"Un dossier existe deja a cet emplacement :\n{destDir}");
+                throw new IOException($"Un dossier existe déjà a cet emplacement :\n{destDir}");
 
             string parent = Path.GetDirectoryName(destDir);
             if (!string.IsNullOrEmpty(parent))

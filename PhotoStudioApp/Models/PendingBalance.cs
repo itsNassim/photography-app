@@ -1,4 +1,4 @@
-namespace PhotoStudioApp.Models
+﻿namespace PhotoStudioApp.Models
 {
     /// <summary>An outstanding amount still owed by a client who only paid part of a charge
     /// (e.g. paid 50 of an 80 total). Tracked here instead of a text file so it can be shown in

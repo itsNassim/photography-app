@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using System.Windows.Forms;
 
 namespace PhotoStudioApp.UI
@@ -43,9 +43,9 @@ namespace PhotoStudioApp.UI
 
             var homeTabPage = new TabPage("Accueil") { BackColor = Theme.Background };
             var stockTabPage = new TabPage("Stock") { BackColor = Theme.Background };
-            var categoriesTabPage = new TabPage("Categories / Tarifs") { BackColor = Theme.Background };
+            var categoriesTabPage = new TabPage("Catégories / Tarifs") { BackColor = Theme.Background };
             var historyTabPage = new TabPage("Historique") { BackColor = Theme.Background };
-            var settingsTabPage = new TabPage("Parametres") { BackColor = Theme.Background };
+            var settingsTabPage = new TabPage("Paramètres") { BackColor = Theme.Background };
 
             _homeTab = new HomeTab { Dock = DockStyle.Fill };
             _stockTab = new StockTab { Dock = DockStyle.Fill };

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Windows.Forms;
 using PhotoStudioApp.Data;
@@ -23,7 +23,7 @@ namespace PhotoStudioApp.UI.Dialogs
 
         public AddEditCategoryDialog(Category existing = null)
         {
-            Text = existing == null ? "Ajouter une categorie" : "Modifier la categorie";
+            Text = existing == null ? "Ajouter une catégorie" : "Modifier la catégorie";
             Width = 480;
             Height = 380;
             FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -38,13 +38,13 @@ namespace PhotoStudioApp.UI.Dialogs
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
-            layout.Controls.Add(new Label { Text = "Nom de la categorie :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 0);
+            layout.Controls.Add(new Label { Text = "Nom de la catégorie :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 0);
             _nameBox = new TextBox { Width = 260, Text = existing?.Name ?? "" };
             layout.Controls.Add(_nameBox, 1, 0);
 
             _noFolderCheck = new CheckBox
             {
-                Text = "Article sans dossier (prix fixe, quantite saisie manuellement)",
+                Text = "Article sans dossier (prix fixe, quantité saisie manuellement)",
                 AutoSize = true,
                 Checked = existing != null && !existing.HasFolder,
                 Margin = new Padding(0, 10, 0, 0)
@@ -54,7 +54,7 @@ namespace PhotoStudioApp.UI.Dialogs
 
             _hintLabel = new Label
             {
-                Text = "Exemple : impression de photos depuis le telephone d'un client - pas de dossier a compter,\nvous saisissez juste la quantite dans \"Ajouter une charge\" et le prix se calcule automatiquement.",
+                Text = "Exemple : impression de photos depuis le telephone d'un client - pas de dossier a compter,\nvous saisissez juste la quantité dans \"Ajouter une charge\" et le prix se calcule automatiquement.",
                 AutoSize = true, ForeColor = System.Drawing.Color.Gray, Margin = new Padding(0, 2, 0, 8)
             };
             layout.Controls.Add(_hintLabel, 0, 2);
@@ -108,7 +108,7 @@ namespace PhotoStudioApp.UI.Dialogs
             var settings = new SettingsRepository().LoadAll();
             if (string.IsNullOrWhiteSpace(settings.StudioRootPath))
             {
-                MessageBox.Show("Configurez d'abord le dossier racine du studio dans l'onglet Parametres.",
+                MessageBox.Show("Configurez d'abord le dossier racine du studio dans l'onglet Paramètres.",
                     "Dossier du studio non configure", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
@@ -117,7 +117,7 @@ namespace PhotoStudioApp.UI.Dialogs
 
             using (var dlg = new FolderBrowserDialog())
             {
-                dlg.Description = "Choisissez ou creez le dossier de cette categorie, a l'interieur du dossier du studio.";
+                dlg.Description = "Choisissez ou creez le dossier de cette catégorie, a l'interieur du dossier du studio.";
                 dlg.SelectedPath = settings.StudioRootPath;
 
                 if (dlg.ShowDialog(this) != DialogResult.OK)
@@ -152,7 +152,7 @@ namespace PhotoStudioApp.UI.Dialogs
         {
             if (string.IsNullOrWhiteSpace(_nameBox.Text))
             {
-                MessageBox.Show("Le nom de la categorie est obligatoire.", "Information manquante", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Le nom de la catégorie est obligatoire.", "Information manquante", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 

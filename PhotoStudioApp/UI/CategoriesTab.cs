@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Windows.Forms;
 using PhotoStudioApp.Data;
@@ -30,7 +30,7 @@ namespace PhotoStudioApp.UI
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-            var title = new Label { Text = "Categories / Tarifs", Font = Theme.FontHeading, AutoSize = true, Margin = new Padding(0, 0, 0, 10) };
+            var title = new Label { Text = "Catégories / Tarifs", Font = Theme.FontHeading, AutoSize = true, Margin = new Padding(0, 0, 0, 10) };
             root.Controls.Add(title, 0, 0);
 
             var toolbar = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 8) };
@@ -59,7 +59,7 @@ namespace PhotoStudioApp.UI
             var gridPanel = new Panel { Dock = DockStyle.Fill, BackColor = Theme.CardBackground };
             _grid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true };
             Theme.StyleGrid(_grid);
-            _grid.Columns.Add("Name", "Nom de la categorie");
+            _grid.Columns.Add("Name", "Nom de la catégorie");
             _grid.Columns.Add("Folder", "Dossier (ou sans dossier)");
             _grid.Columns.Add("Type", "Type");
             _grid.Columns.Add("Price", "Prix actuel");
@@ -161,11 +161,11 @@ namespace PhotoStudioApp.UI
                 try
                 {
                     _importExport.ExportCategories(dlg.FileName);
-                    MessageBox.Show("Categories exportees avec succes.", "Termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show("Catégories exportées avec succès.", "Termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show("Echec de l'export :\n" + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show("Échec de l'export :\n" + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
         }
@@ -186,14 +186,14 @@ namespace PhotoStudioApp.UI
                     RefreshAll();
                     CategoriesChanged?.Invoke(this, EventArgs.Empty);
 
-                    string msg = $"{result.Added} categorie(s) ajoutee(s), {result.SkippedDuplicates} deja existante(s) ignoree(s).";
+                    string msg = $"{result.Added} catégorie(s) ajoutée(s), {result.SkippedDuplicates} déjà existante(s) ignorée(s).";
                     if (result.Errors.Count > 0)
-                        msg += $"\n\n{result.Errors.Count} ligne(s) ignoree(s) a cause d'un format invalide.";
+                        msg += $"\n\n{result.Errors.Count} ligne(s) ignorée(s) a cause d'un format invalide.";
                     MessageBox.Show(msg, "Import termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show("Echec de l'import :\n" + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show("Échec de l'import :\n" + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
         }
