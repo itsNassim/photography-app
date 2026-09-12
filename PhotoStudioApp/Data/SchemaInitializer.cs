@@ -130,20 +130,25 @@ namespace PhotoStudioApp.Data
             AddColumnIfMissing("CustomCharges", "LinkedCategoryId", "INTEGER REFERENCES Categories(Id)");
             AddColumnIfMissing("DailyCloseLineItems", "PurgedCount", "INTEGER NOT NULL DEFAULT 0");
             AddColumnIfMissing("DailyCloses", "TotalExpenses", "REAL NOT NULL DEFAULT 0");
-            bool netTotalJustAdded = AddColumnIfMissing("DailyCloses", "NetTotal", "REAL NOT NULL DEFAULT 0");
-            if (netTotalJustAdded)
-            {
-                // BUG FIX: every day closed before expense-tracking existed got NetTotal=0 from
-                // the column's DEFAULT, which is wrong - those days genuinely had zero expenses,
-                // so their real net total is just their revenue (GrandTotal). Without this
-                // backfill, "TOTAL NET DU MOIS" for any month containing pre-existing closed
-                // days came out far too low (summing a bunch of incorrect 0s instead of their
-                // actual revenue). Runs exactly once, only in the same migration step that
-                // introduces the column - never overwrites a NetTotal computed normally later.
-                using (var conn = Db.OpenConnection())
-                using (var cmd = new SQLiteCommand("UPDATE DailyCloses SET NetTotal = GrandTotal - TotalExpenses;", conn))
-                    cmd.ExecuteNonQuery();
-            }
+            AddColumnIfMissing("DailyCloses", "NetTotal", "REAL NOT NULL DEFAULT 0");
+
+            // SELF-HEALING FIX (not just a one-time migration): a stale NetTotal=0 can exist not
+            // only right when the column is first added, but also on any database that already
+            // had the column from an earlier build of this app that shipped before NetTotal was
+            // being computed correctly at close time. A one-time "only when the column is brand
+            // new" backfill misses that second case entirely - the exact bug the user hit,
+            // where days closed with an older build stayed stuck at NetTotal=0 forever even
+            // after upgrading, while newly-closed days computed correctly. This now runs on
+            // EVERY startup and is fully idempotent/safe: it only touches rows where the stored
+            // NetTotal is 0 AND that's actually wrong (GrandTotal-TotalExpenses isn't really 0
+            // for that row) - a day that's genuinely all-zero (no revenue, no expenses) is
+            // correctly left alone, and a day with a normally-computed nonzero NetTotal is never
+            // touched since it isn't 0 to begin with.
+            using (var conn = Db.OpenConnection())
+            using (var cmd = new SQLiteCommand(
+                "UPDATE DailyCloses SET NetTotal = GrandTotal - TotalExpenses " +
+                "WHERE NetTotal = 0 AND (GrandTotal - TotalExpenses) <> 0;", conn))
+                cmd.ExecuteNonQuery();
 
             // Older databases created Categories.FolderRelativePath as NOT NULL, back when
             // every category had a folder. SQLite can't just drop a NOT NULL constraint with
