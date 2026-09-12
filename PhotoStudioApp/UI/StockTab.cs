@@ -3,6 +3,7 @@ using System.Linq;
 using System.Windows.Forms;
 using PhotoStudioApp.Data;
 using PhotoStudioApp.Models;
+using PhotoStudioApp.Services;
 using PhotoStudioApp.UI.Dialogs;
 
 namespace PhotoStudioApp.UI
@@ -12,6 +13,7 @@ namespace PhotoStudioApp.UI
         public event EventHandler StockChanged;
 
         private readonly StockRepository _repo = new StockRepository();
+        private readonly ImportExportService _importExport = new ImportExportService();
         private DataGridView _grid;
         private TextBox _searchBox;
         private ComboBox _filterCombo;
@@ -55,6 +57,12 @@ namespace PhotoStudioApp.UI
             var deleteBtn = Theme.MakeDangerButton("Supprimer");
             deleteBtn.Width = 100;
             deleteBtn.Click += DeleteBtn_Click;
+            var exportBtn = Theme.MakeSecondaryButton("Exporter");
+            exportBtn.Width = 110;
+            exportBtn.Click += ExportBtn_Click;
+            var importBtn = Theme.MakeSecondaryButton("Importer");
+            importBtn.Width = 110;
+            importBtn.Click += ImportBtn_Click;
 
             toolbar.Controls.Add(searchLabel);
             toolbar.Controls.Add(_searchBox);
@@ -64,6 +72,8 @@ namespace PhotoStudioApp.UI
             toolbar.Controls.Add(editBtn);
             toolbar.Controls.Add(restockBtn);
             toolbar.Controls.Add(deleteBtn);
+            toolbar.Controls.Add(exportBtn);
+            toolbar.Controls.Add(importBtn);
             root.Controls.Add(toolbar, 0, 1);
 
             var gridPanel = new Panel { Dock = DockStyle.Fill, BackColor = Theme.CardBackground };
@@ -216,6 +226,56 @@ namespace PhotoStudioApp.UI
                 _repo.Deactivate(item.Id);
                 RefreshAll();
                 StockChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+
+        /// <summary>Exports every stock item (active and inactive) to a CSV file.
+        /// Password-protected since it's a bulk data-access action, matching Import.</summary>
+        private void ExportBtn_Click(object sender, EventArgs e)
+        {
+            if (!AuthGate.RequireAdminPassword(this)) return;
+
+            using (var dlg = new SaveFileDialog { Filter = "Fichier CSV (*.csv)|*.csv", FileName = "stock.csv" })
+            {
+                if (dlg.ShowDialog() != DialogResult.OK) return;
+                try
+                {
+                    _importExport.ExportStock(dlg.FileName);
+                    MessageBox.Show("Stock exporte avec succes.", "Termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Echec de l'export :\n" + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        /// <summary>Imports stock items from a CSV file (as produced by Export). Any item whose
+        /// name already exists (case-insensitive) is skipped - never overwritten, never
+        /// duplicated, and its current quantity is left untouched - so importing the same file
+        /// twice is always safe.</summary>
+        private void ImportBtn_Click(object sender, EventArgs e)
+        {
+            if (!AuthGate.RequireAdminPassword(this)) return;
+
+            using (var dlg = new OpenFileDialog { Filter = "Fichier CSV (*.csv)|*.csv" })
+            {
+                if (dlg.ShowDialog() != DialogResult.OK) return;
+                try
+                {
+                    var result = _importExport.ImportStock(dlg.FileName);
+                    RefreshAll();
+                    StockChanged?.Invoke(this, EventArgs.Empty);
+
+                    string msg = $"{result.Added} article(s) ajoute(s), {result.SkippedDuplicates} deja existant(s) ignore(s).";
+                    if (result.Errors.Count > 0)
+                        msg += $"\n\n{result.Errors.Count} ligne(s) ignoree(s) a cause d'un format invalide.";
+                    MessageBox.Show(msg, "Import termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Echec de l'import :\n" + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
         }
     }

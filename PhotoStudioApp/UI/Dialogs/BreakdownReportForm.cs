@@ -94,7 +94,19 @@ namespace PhotoStudioApp.UI.Dialogs
             }
 
             sb.AppendLine(new string('-', 46));
-            sb.AppendLine($"TOTAL : {_close.GrandTotal:0.00}");
+            sb.AppendLine($"TOTAL (revenu) : {_close.GrandTotal:0.00}");
+
+            if (_close.Expenses.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("Depenses (achats pour le magasin) :");
+                foreach (var ex in _close.Expenses)
+                    sb.AppendLine($"  {ex.Description,-30} = -{ex.Amount,9:0.00}");
+                sb.AppendLine($"Total des depenses : -{_close.TotalExpenses:0.00}");
+                sb.AppendLine(new string('-', 46));
+            }
+
+            sb.AppendLine($"TOTAL NET : {_close.NetTotal:0.00}");
             return sb.ToString();
         }
 

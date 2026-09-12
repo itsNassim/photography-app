@@ -19,12 +19,14 @@ namespace PhotoStudioApp.UI
         private readonly StockRepository _stockRepo = new StockRepository();
         private readonly SettingsRepository _settingsRepo = new SettingsRepository();
         private readonly PendingBalanceRepository _pendingRepo = new PendingBalanceRepository();
+        private readonly ExpenseRepository _expenseRepo = new ExpenseRepository();
         private readonly FolderCountService _folders = new FolderCountService();
         private readonly ClosingService _closingService = new ClosingService();
 
         private DataGridView _categoryGrid;
         private DataGridView _chargesGrid;
         private DataGridView _pendingGrid;
+        private DataGridView _expensesGrid;
         private Label _dateLabel;
         private Timer _autoRefreshTimer;
 
@@ -59,17 +61,29 @@ namespace PhotoStudioApp.UI
 
         private void BuildLayout()
         {
+            // Scrolling fix: a TableLayoutPanel that is Dock=Fill with Percent rows can't
+            // scroll - on a small window each section (categories/charges/soldes/depenses)
+            // just gets squeezed into whatever tiny percentage of space remains, with no way to
+            // see the rest. Fix: give each section a fixed, comfortable minimum height instead
+            // of a percentage, let the root panel AutoSize to its true total height, and put it
+            // inside an outer Panel that actually scrolls when that total exceeds the window -
+            // the same pattern used for the Parametres tab's scroll fix.
+            var scrollPanel = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = Theme.Background };
+
             var root = new TableLayoutPanel
             {
-                Dock = DockStyle.Fill,
+                Dock = DockStyle.Top,
                 ColumnCount = 1,
-                RowCount = 5,
-                Padding = new Padding(16)
+                RowCount = 6,
+                Padding = new Padding(16),
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink
             };
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            root.RowStyles.Add(new RowStyle(SizeType.Percent, 45));
-            root.RowStyles.Add(new RowStyle(SizeType.Percent, 30));
-            root.RowStyles.Add(new RowStyle(SizeType.Percent, 15));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 300));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 210));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 170));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 170));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
             // --- En-tete : date + bouton actualiser ---
@@ -161,6 +175,39 @@ namespace PhotoStudioApp.UI
             pendingOuter.Controls.Add(pendingPanel, 0, 1);
             root.Controls.Add(pendingOuter, 0, 3);
 
+            // --- Depenses du jour (achats pour le magasin) ---
+            var expensesOuter = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 1 };
+            expensesOuter.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            expensesOuter.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+            var expensesHeader = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill };
+            var expensesTitle = new Label { Text = "Depenses du jour (achats pour le magasin)", Font = Theme.FontSubheading, AutoSize = true, Margin = new Padding(0, 6, 20, 6) };
+            var addExpenseBtn = Theme.MakePrimaryButton("Ajouter");
+            addExpenseBtn.Width = 110;
+            addExpenseBtn.Click += AddExpenseBtn_Click;
+            var editExpenseBtn = Theme.MakeSecondaryButton("Modifier");
+            editExpenseBtn.Width = 110;
+            editExpenseBtn.Click += EditExpenseBtn_Click;
+            var deleteExpenseBtn = Theme.MakeDangerButton("Supprimer");
+            deleteExpenseBtn.Width = 110;
+            deleteExpenseBtn.Click += DeleteExpenseBtn_Click;
+            expensesHeader.Controls.Add(expensesTitle);
+            expensesHeader.Controls.Add(addExpenseBtn);
+            expensesHeader.Controls.Add(editExpenseBtn);
+            expensesHeader.Controls.Add(deleteExpenseBtn);
+
+            var expensesPanel = new Panel { Dock = DockStyle.Fill, BackColor = Theme.CardBackground };
+            _expensesGrid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true };
+            Theme.StyleGrid(_expensesGrid);
+            _expensesGrid.Columns.Add("Description", "Description");
+            _expensesGrid.Columns.Add("Amount", "Montant");
+            _expensesGrid.CellDoubleClick += (s, e) => EditExpenseBtn_Click(s, e);
+            expensesPanel.Controls.Add(_expensesGrid);
+
+            expensesOuter.Controls.Add(expensesHeader, 0, 0);
+            expensesOuter.Controls.Add(expensesPanel, 0, 1);
+            root.Controls.Add(expensesOuter, 0, 4);
+
             // --- Pied de page : bouton Cloturer la journee (pas d'apercu de total, sur demande) ---
             var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Margin = new Padding(0, 12, 0, 0) };
             var closeDayBtn = Theme.MakePrimaryButton("Cloturer la journee");
@@ -171,9 +218,10 @@ namespace PhotoStudioApp.UI
             closeDayBtn.Height = 46;
             closeDayBtn.Click += CloseDayBtn_Click;
             footer.Controls.Add(closeDayBtn);
-            root.Controls.Add(footer, 0, 4);
+            root.Controls.Add(footer, 0, 5);
 
-            Controls.Add(root);
+            scrollPanel.Controls.Add(root);
+            Controls.Add(scrollPanel);
         }
 
         public void RefreshAll()
@@ -187,6 +235,7 @@ namespace PhotoStudioApp.UI
             RefreshCategoryCountsOnly();
             RefreshCharges();
             RefreshPendingBalances();
+            RefreshExpenses();
         }
 
         public void RefreshCategoryCountsOnly()
@@ -266,6 +315,69 @@ namespace PhotoStudioApp.UI
                     RefreshPendingBalances();
                 }
             }
+        }
+
+        /// <summary>Refreshes the "Depenses du jour" grid - money spent (e.g. a worker buying
+        /// supplies for the studio), tracked separately from revenue and subtracted at close
+        /// time to produce the day's net total.</summary>
+        private void RefreshExpenses()
+        {
+            if (_expensesGrid == null) return;
+            var settings = _settingsRepo.LoadAll();
+            var expenses = _expenseRepo.GetForWorkDate(settings.CurrentWorkDate);
+            _expensesGrid.Rows.Clear();
+            foreach (var ex in expenses)
+            {
+                int rowIdx = _expensesGrid.Rows.Add(ex.Description, ex.Amount.ToString("0.00"));
+                _expensesGrid.Rows[rowIdx].Tag = ex.Id;
+            }
+        }
+
+        private void AddExpenseBtn_Click(object sender, EventArgs e)
+        {
+            using (var dlg = new AddExpenseDialog())
+            {
+                if (dlg.ShowDialog() == DialogResult.OK)
+                {
+                    var settings = _settingsRepo.LoadAll();
+                    var expense = dlg.ResultExpense;
+                    expense.WorkDate = settings.CurrentWorkDate;
+                    _expenseRepo.Add(expense);
+                    RefreshExpenses();
+                }
+            }
+        }
+
+        private void EditExpenseBtn_Click(object sender, EventArgs e)
+        {
+            if (_expensesGrid.CurrentRow?.Tag == null) return;
+            int id = (int)_expensesGrid.CurrentRow.Tag;
+            var existing = _expenseRepo.GetById(id);
+            if (existing == null) return;
+
+            using (var dlg = new AddExpenseDialog(existing))
+            {
+                if (dlg.ShowDialog() == DialogResult.OK)
+                {
+                    var updated = dlg.ResultExpense;
+                    updated.Id = id;
+                    updated.WorkDate = existing.WorkDate;
+                    _expenseRepo.Update(updated);
+                    RefreshExpenses();
+                }
+            }
+        }
+
+        private void DeleteExpenseBtn_Click(object sender, EventArgs e)
+        {
+            if (_expensesGrid.CurrentRow?.Tag == null) return;
+            int id = (int)_expensesGrid.CurrentRow.Tag;
+
+            if (MessageBox.Show("Supprimer cette depense ?", "Confirmer", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                return;
+
+            _expenseRepo.Delete(id);
+            RefreshExpenses();
         }
 
         public void RefreshCustomChargeStockOptions()

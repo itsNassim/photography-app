@@ -14,14 +14,16 @@ namespace PhotoStudioApp.Data
         {
             int closeId;
             using (var cmd = new SQLiteCommand(@"
-                INSERT INTO DailyCloses (CloseDate, ArchiveFolderPath, ClosedAt, GrandTotal)
-                VALUES (@date, @archive, @closedAt, @total);
+                INSERT INTO DailyCloses (CloseDate, ArchiveFolderPath, ClosedAt, GrandTotal, TotalExpenses, NetTotal)
+                VALUES (@date, @archive, @closedAt, @total, @expenses, @net);
                 SELECT last_insert_rowid();", conn, tx))
             {
                 cmd.Parameters.AddWithValue("@date", close.CloseDate);
                 cmd.Parameters.AddWithValue("@archive", close.ArchiveFolderPath);
                 cmd.Parameters.AddWithValue("@closedAt", close.ClosedAt.ToString("s"));
                 cmd.Parameters.AddWithValue("@total", close.GrandTotal);
+                cmd.Parameters.AddWithValue("@expenses", close.TotalExpenses);
+                cmd.Parameters.AddWithValue("@net", close.NetTotal);
                 closeId = Convert.ToInt32((long)cmd.ExecuteScalar());
             }
 
@@ -54,6 +56,19 @@ namespace PhotoStudioApp.Data
                 }
             }
 
+            foreach (var ex in close.Expenses)
+            {
+                using (var cmd = new SQLiteCommand(@"
+                    INSERT INTO DailyCloseExpenses (DailyCloseId, Description, Amount)
+                    VALUES (@cid, @desc, @amt);", conn, tx))
+                {
+                    cmd.Parameters.AddWithValue("@cid", closeId);
+                    cmd.Parameters.AddWithValue("@desc", ex.Description);
+                    cmd.Parameters.AddWithValue("@amt", ex.Amount);
+                    cmd.ExecuteNonQuery();
+                }
+            }
+
             close.Id = closeId;
             return closeId;
         }
@@ -63,7 +78,7 @@ namespace PhotoStudioApp.Data
             var list = new List<DailyClose>();
             using (var conn = Db.OpenConnection())
             using (var cmd = new SQLiteCommand(@"
-                SELECT Id, CloseDate, ArchiveFolderPath, ClosedAt, GrandTotal
+                SELECT Id, CloseDate, ArchiveFolderPath, ClosedAt, GrandTotal, TotalExpenses, NetTotal
                 FROM DailyCloses ORDER BY CloseDate DESC;", conn))
             using (var r = cmd.ExecuteReader())
             {
@@ -75,7 +90,9 @@ namespace PhotoStudioApp.Data
                         CloseDate = r.GetString(1),
                         ArchiveFolderPath = r.GetString(2),
                         ClosedAt = DateTime.Parse(r.GetString(3)),
-                        GrandTotal = Convert.ToDecimal(r.GetDouble(4))
+                        GrandTotal = Convert.ToDecimal(r.GetDouble(4)),
+                        TotalExpenses = Convert.ToDecimal(r.GetDouble(5)),
+                        NetTotal = Convert.ToDecimal(r.GetDouble(6))
                     });
                 }
             }
@@ -88,7 +105,7 @@ namespace PhotoStudioApp.Data
             using (var conn = Db.OpenConnection())
             {
                 using (var cmd = new SQLiteCommand(@"
-                    SELECT Id, CloseDate, ArchiveFolderPath, ClosedAt, GrandTotal
+                    SELECT Id, CloseDate, ArchiveFolderPath, ClosedAt, GrandTotal, TotalExpenses, NetTotal
                     FROM DailyCloses WHERE Id=@id;", conn))
                 {
                     cmd.Parameters.AddWithValue("@id", id);
@@ -101,7 +118,9 @@ namespace PhotoStudioApp.Data
                             CloseDate = r.GetString(1),
                             ArchiveFolderPath = r.GetString(2),
                             ClosedAt = DateTime.Parse(r.GetString(3)),
-                            GrandTotal = Convert.ToDecimal(r.GetDouble(4))
+                            GrandTotal = Convert.ToDecimal(r.GetDouble(4)),
+                            TotalExpenses = Convert.ToDecimal(r.GetDouble(5)),
+                            NetTotal = Convert.ToDecimal(r.GetDouble(6))
                         };
                     }
                 }
@@ -143,6 +162,23 @@ namespace PhotoStudioApp.Data
                         }
                     }
                 }
+
+                using (var cmd = new SQLiteCommand(@"
+                    SELECT Description, Amount FROM DailyCloseExpenses WHERE DailyCloseId=@id;", conn))
+                {
+                    cmd.Parameters.AddWithValue("@id", id);
+                    using (var r = cmd.ExecuteReader())
+                    {
+                        while (r.Read())
+                        {
+                            close.Expenses.Add(new DailyCloseExpenseSnapshot
+                            {
+                                Description = r.GetString(0),
+                                Amount = Convert.ToDecimal(r.GetDouble(1))
+                            });
+                        }
+                    }
+                }
             }
             return close;
         }
@@ -154,7 +190,7 @@ namespace PhotoStudioApp.Data
             var list = new List<MonthSummary>();
             using (var conn = Db.OpenConnection())
             using (var cmd = new SQLiteCommand(@"
-                SELECT substr(CloseDate, 1, 7) AS YearMonth, COUNT(*), SUM(GrandTotal)
+                SELECT substr(CloseDate, 1, 7) AS YearMonth, COUNT(*), SUM(GrandTotal), SUM(TotalExpenses), SUM(NetTotal)
                 FROM DailyCloses
                 GROUP BY YearMonth
                 ORDER BY YearMonth DESC;", conn))
@@ -174,7 +210,9 @@ namespace PhotoStudioApp.Data
                         YearMonth = yearMonth,
                         MonthLabel = label,
                         DaysClosed = r.GetInt32(1),
-                        TotalRevenue = Convert.ToDecimal(r.GetDouble(2))
+                        TotalRevenue = Convert.ToDecimal(r.GetDouble(2)),
+                        TotalExpenses = Convert.ToDecimal(r.GetDouble(3)),
+                        NetRevenue = Convert.ToDecimal(r.GetDouble(4))
                     });
                 }
             }
@@ -189,7 +227,7 @@ namespace PhotoStudioApp.Data
             var list = new List<DailyClose>();
             using (var conn = Db.OpenConnection())
             using (var cmd = new SQLiteCommand(@"
-                SELECT Id, CloseDate, ArchiveFolderPath, ClosedAt, GrandTotal
+                SELECT Id, CloseDate, ArchiveFolderPath, ClosedAt, GrandTotal, TotalExpenses, NetTotal
                 FROM DailyCloses
                 WHERE substr(CloseDate, 1, 7) = @ym
                 ORDER BY CloseDate ASC;", conn))
@@ -205,7 +243,9 @@ namespace PhotoStudioApp.Data
                             CloseDate = r.GetString(1),
                             ArchiveFolderPath = r.GetString(2),
                             ClosedAt = DateTime.Parse(r.GetString(3)),
-                            GrandTotal = Convert.ToDecimal(r.GetDouble(4))
+                            GrandTotal = Convert.ToDecimal(r.GetDouble(4)),
+                            TotalExpenses = Convert.ToDecimal(r.GetDouble(5)),
+                            NetTotal = Convert.ToDecimal(r.GetDouble(6))
                         });
                     }
                 }
@@ -223,13 +263,14 @@ namespace PhotoStudioApp.Data
             {
                 Exec(conn, tx, "DELETE FROM DailyCloseLineItems WHERE DailyCloseId=@id;", id);
                 Exec(conn, tx, "DELETE FROM DailyCloseCustomCharges WHERE DailyCloseId=@id;", id);
+                Exec(conn, tx, "DELETE FROM DailyCloseExpenses WHERE DailyCloseId=@id;", id);
                 Exec(conn, tx, "DELETE FROM DailyCloses WHERE Id=@id;", id);
                 tx.Commit();
             }
         }
 
         /// <summary>Wipes every closed-day record from the database (all history, all line
-        /// items, all custom-charge snapshots). Does NOT touch the filesystem - see
+        /// items, all custom-charge and expense snapshots). Does NOT touch the filesystem - see
         /// Services/ArchiveCleanupService for deleting the actual archived folders.</summary>
         public void DeleteAllHistory()
         {
@@ -239,6 +280,8 @@ namespace PhotoStudioApp.Data
                 using (var cmd = new SQLiteCommand("DELETE FROM DailyCloseLineItems;", conn, tx))
                     cmd.ExecuteNonQuery();
                 using (var cmd = new SQLiteCommand("DELETE FROM DailyCloseCustomCharges;", conn, tx))
+                    cmd.ExecuteNonQuery();
+                using (var cmd = new SQLiteCommand("DELETE FROM DailyCloseExpenses;", conn, tx))
                     cmd.ExecuteNonQuery();
                 using (var cmd = new SQLiteCommand("DELETE FROM DailyCloses;", conn, tx))
                     cmd.ExecuteNonQuery();

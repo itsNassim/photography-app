@@ -25,7 +25,6 @@ namespace PhotoStudioApp.UI.Dialogs
         private readonly TextBox _descBox;
         private readonly NumericUpDown _amountBox;
         private readonly NumericUpDown _paidAmountBox;
-        private readonly TextBox _searchBox;
         private readonly ComboBox _linkCombo;
         private readonly NumericUpDown _qtyBox;
         private readonly CheckBox _autoAmountCheck;
@@ -40,7 +39,7 @@ namespace PhotoStudioApp.UI.Dialogs
         {
             Text = existing == null ? "Ajouter une charge additionnelle" : "Modifier la charge additionnelle";
             Width = 480;
-            Height = 480;
+            Height = 440;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             StartPosition = FormStartPosition.CenterParent;
             MaximizeBox = false;
@@ -48,44 +47,50 @@ namespace PhotoStudioApp.UI.Dialogs
             Font = Theme.FontBase;
             BackColor = Theme.CardBackground;
 
-            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(20), RowCount = 8 };
+            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(20), RowCount = 7 };
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
-            layout.Controls.Add(new Label { Text = "Rechercher (nom ou\ncategorie) :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 0);
-            _searchBox = new TextBox { Width = 270 };
-            _searchBox.TextChanged += (s, e) => ApplySearchFilter();
-            layout.Controls.Add(_searchBox, 1, 0);
+            // Editable + autocomplete instead of a separate search field: typing directly into
+            // this dropdown filters/suggests matching stock items, categories, and pending
+            // balances inline (native Windows autocomplete popup), while the dropdown arrow
+            // still shows the complete, unfiltered list. See RepopulateCombo for how the
+            // suggestion list is kept in sync with the items.
+            layout.Controls.Add(new Label { Text = "Categorie, article de stock,\nou solde en attente (tapez pour\nrechercher, ou choisissez) :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 0);
+            _linkCombo = new ComboBox
+            {
+                Width = 270,
+                DropDownStyle = ComboBoxStyle.DropDown,
+                AutoCompleteMode = AutoCompleteMode.SuggestAppend,
+                AutoCompleteSource = AutoCompleteSource.CustomSource
+            };
+            layout.Controls.Add(_linkCombo, 1, 0);
 
-            layout.Controls.Add(new Label { Text = "Categorie, article de stock,\nou solde en attente (optionnel) :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 1);
-            _linkCombo = new ComboBox { Width = 270, DropDownStyle = ComboBoxStyle.DropDownList };
-            layout.Controls.Add(_linkCombo, 1, 1);
-
-            layout.Controls.Add(new Label { Text = "Description :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 2);
+            layout.Controls.Add(new Label { Text = "Description :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 1);
             _descBox = new TextBox { Width = 270, Text = existing?.Description ?? "" };
-            layout.Controls.Add(_descBox, 1, 2);
+            layout.Controls.Add(_descBox, 1, 1);
 
-            layout.Controls.Add(new Label { Text = "Quantite :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 3);
+            layout.Controls.Add(new Label { Text = "Quantite :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 2);
             _qtyBox = new NumericUpDown { Width = 100, Minimum = 0, Maximum = 100000, Enabled = false, Value = existing?.Quantity ?? 0 };
             _qtyBox.ValueChanged += (s, e) => RecomputeAutoAmount();
-            layout.Controls.Add(_qtyBox, 1, 3);
+            layout.Controls.Add(_qtyBox, 1, 2);
 
-            layout.Controls.Add(new Label { Text = "Utiliser le prix du lien\npour le montant :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 4);
+            layout.Controls.Add(new Label { Text = "Utiliser le prix du lien\npour le montant :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 3);
             _autoAmountCheck = new CheckBox { Checked = existing == null, Enabled = false };
             _autoAmountCheck.CheckedChanged += (s, e) => RecomputeAutoAmount();
-            layout.Controls.Add(_autoAmountCheck, 1, 4);
+            layout.Controls.Add(_autoAmountCheck, 1, 3);
 
-            layout.Controls.Add(new Label { Text = "Montant total :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 5);
+            layout.Controls.Add(new Label { Text = "Montant total :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 4);
             _amountBox = new NumericUpDown { Width = 120, Minimum = 0, Maximum = 1000000, DecimalPlaces = 2, Value = existing?.Amount ?? 0 };
             _amountBox.ValueChanged += (s, e) => SyncPaidToAmountIfUnlinkedDefault();
-            layout.Controls.Add(_amountBox, 1, 5);
+            layout.Controls.Add(_amountBox, 1, 4);
 
             // "Montant paye maintenant" comes LAST (after Montant/quantite/etc. are settled) so
             // filling in the rest of the form never overwrites a partial-payment amount the user
             // already typed here - see SyncPaidToAmountIfUnlinkedDefault.
-            layout.Controls.Add(new Label { Text = "Montant paye maintenant\n(si different, le reste devient\nun solde en attente) :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 6);
+            layout.Controls.Add(new Label { Text = "Montant paye maintenant\n(si different, le reste devient\nun solde en attente) :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 5);
             _paidAmountBox = new NumericUpDown { Width = 120, Minimum = 0, Maximum = 1000000, DecimalPlaces = 2, Value = existing?.Amount ?? 0 };
-            layout.Controls.Add(_paidAmountBox, 1, 6);
+            layout.Controls.Add(_paidAmountBox, 1, 5);
 
             var btnPanel = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Dock = DockStyle.Fill };
             var okBtn = Theme.MakePrimaryButton("Enregistrer");
@@ -96,7 +101,7 @@ namespace PhotoStudioApp.UI.Dialogs
             cancelBtn.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
             btnPanel.Controls.Add(okBtn);
             btnPanel.Controls.Add(cancelBtn);
-            layout.Controls.Add(btnPanel, 1, 7);
+            layout.Controls.Add(btnPanel, 1, 6);
 
             Controls.Add(layout);
             AcceptButton = okBtn;
@@ -187,35 +192,6 @@ namespace PhotoStudioApp.UI.Dialogs
             RepopulateCombo(_allOptions);
         }
 
-        /// <summary>Filters the dropdown live as the user types in the search box, by item/stock
-        /// name, stock category, service-category name, or pending-balance description - makes
-        /// finding the right entry quick even when there are many to scroll through.</summary>
-        private void ApplySearchFilter()
-        {
-            string term = _searchBox.Text?.Trim() ?? "";
-            if (term.Length == 0)
-            {
-                RepopulateCombo(_allOptions);
-                return;
-            }
-
-            var filtered = new List<LinkOption> { _allOptions[0] }; // always keep "(aucun...)"
-            foreach (var o in _allOptions.Skip(1))
-            {
-                bool matches =
-                    (o.Stock != null && (
-                        o.Stock.Name.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                        (o.Stock.Category ?? "").IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0)) ||
-                    (o.ServiceCategory != null &&
-                        o.ServiceCategory.Name.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0) ||
-                    (o.Balance != null &&
-                        o.Balance.Description.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0);
-                if (matches)
-                    filtered.Add(o);
-            }
-            RepopulateCombo(filtered);
-        }
-
         private void RepopulateCombo(List<LinkOption> options)
         {
             var previouslySelected = SelectedOption();
@@ -223,6 +199,13 @@ namespace PhotoStudioApp.UI.Dialogs
             _linkCombo.Items.Clear();
             foreach (var o in options)
                 _linkCombo.Items.Add(o);
+
+            // Powers the native "type to filter/suggest" popup on the now-editable dropdown -
+            // this is what replaced the old separate search TextBox: typing here filters
+            // suggestions inline, while clicking the dropdown arrow still shows everything.
+            var suggestions = new AutoCompleteStringCollection();
+            suggestions.AddRange(options.Select(o => o.Label).ToArray());
+            _linkCombo.AutoCompleteCustomSource = suggestions;
 
             int idx = 0;
             if (previouslySelected != null)

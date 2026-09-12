@@ -27,6 +27,7 @@ namespace PhotoStudioApp.Services
         private readonly FolderCountService _folders = new FolderCountService();
         private readonly CategoryRepository _categoryRepo = new CategoryRepository();
         private readonly CustomChargeRepository _chargeRepo = new CustomChargeRepository();
+        private readonly ExpenseRepository _expenseRepo = new ExpenseRepository();
         private readonly DailyCloseRepository _closeRepo = new DailyCloseRepository();
         private readonly SettingsRepository _settingsRepo = new SettingsRepository();
 
@@ -110,13 +111,19 @@ namespace PhotoStudioApp.Services
             foreach (var c in charges)
                 close.CustomCharges.Add(new DailyCloseCustomChargeSnapshot { Description = c.Description, Amount = c.Amount });
 
-            close.GrandTotal = close.LineItems.Sum(li => li.Subtotal) + close.CustomCharges.Sum(c => c.Amount);
+            var expenses = _expenseRepo.GetForWorkDate(settings.CurrentWorkDate);
+            foreach (var ex in expenses)
+                close.Expenses.Add(new DailyCloseExpenseSnapshot { Description = ex.Description, Amount = ex.Amount });
 
-            if (totalPhotosFound == 0 && close.CustomCharges.Count == 0 && !confirmedEmptyDay)
+            close.GrandTotal = close.LineItems.Sum(li => li.Subtotal) + close.CustomCharges.Sum(c => c.Amount);
+            close.TotalExpenses = close.Expenses.Sum(ex => ex.Amount);
+            close.NetTotal = close.GrandTotal - close.TotalExpenses;
+
+            if (totalPhotosFound == 0 && close.CustomCharges.Count == 0 && close.Expenses.Count == 0 && !confirmedEmptyDay)
             {
                 throw new EmptyDayException(
-                    "Aucune photo trouvee dans les dossiers de categories, et aucune charge additionnelle aujourd'hui. " +
-                    "Cloturer quand meme la journee ?");
+                    "Aucune photo trouvee dans les dossiers de categories, aucune charge additionnelle, " +
+                    "et aucune depense aujourd'hui. Cloturer quand meme la journee ?");
             }
 
             // 2) NOW move each category's (already-purged) photos into the working folder.
@@ -161,6 +168,7 @@ namespace PhotoStudioApp.Services
                 {
                     _closeRepo.Save(close, conn, tx);
                     _chargeRepo.DeleteAllForWorkDate(settings.CurrentWorkDate, conn, tx);
+                    _expenseRepo.DeleteAllForWorkDate(settings.CurrentWorkDate, conn, tx);
                     tx.Commit();
                 }
                 catch

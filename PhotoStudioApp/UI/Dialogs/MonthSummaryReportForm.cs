@@ -85,10 +85,12 @@ namespace PhotoStudioApp.UI.Dialogs
             sb.AppendLine(new string('-', 46));
 
             foreach (var day in _days)
-                sb.AppendLine($"{day.CloseDate,-20} Total = {day.GrandTotal,10:0.00}");
+                sb.AppendLine($"{day.CloseDate,-14} revenu {day.GrandTotal,9:0.00}  depenses -{day.TotalExpenses,8:0.00}  net {day.NetTotal,9:0.00}");
 
             sb.AppendLine(new string('-', 46));
-            sb.AppendLine($"TOTAL DU MOIS : {_summary.TotalRevenue:0.00}");
+            sb.AppendLine($"TOTAL DU MOIS (revenu) : {_summary.TotalRevenue:0.00}");
+            sb.AppendLine($"Total des depenses du mois : -{_summary.TotalExpenses:0.00}");
+            sb.AppendLine($"TOTAL NET DU MOIS : {_summary.NetRevenue:0.00}");
             return sb.ToString();
         }
 

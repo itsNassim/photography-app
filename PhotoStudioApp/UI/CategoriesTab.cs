@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using PhotoStudioApp.Data;
 using PhotoStudioApp.Models;
+using PhotoStudioApp.Services;
 using PhotoStudioApp.UI.Dialogs;
 
 namespace PhotoStudioApp.UI
@@ -12,6 +13,7 @@ namespace PhotoStudioApp.UI
         public event EventHandler CategoriesChanged;
 
         private readonly CategoryRepository _repo = new CategoryRepository();
+        private readonly ImportExportService _importExport = new ImportExportService();
         private DataGridView _grid;
 
         public CategoriesTab()
@@ -41,9 +43,17 @@ namespace PhotoStudioApp.UI
             var toggleBtn = Theme.MakeSecondaryButton("Activer / Desactiver");
             toggleBtn.Width = 170;
             toggleBtn.Click += ToggleBtn_Click;
+            var exportBtn = Theme.MakeSecondaryButton("Exporter");
+            exportBtn.Width = 110;
+            exportBtn.Click += ExportBtn_Click;
+            var importBtn = Theme.MakeSecondaryButton("Importer");
+            importBtn.Width = 110;
+            importBtn.Click += ImportBtn_Click;
             toolbar.Controls.Add(addBtn);
             toolbar.Controls.Add(editBtn);
             toolbar.Controls.Add(toggleBtn);
+            toolbar.Controls.Add(exportBtn);
+            toolbar.Controls.Add(importBtn);
             root.Controls.Add(toolbar, 0, 1);
 
             var gridPanel = new Panel { Dock = DockStyle.Fill, BackColor = Theme.CardBackground };
@@ -137,6 +147,55 @@ namespace PhotoStudioApp.UI
             }
             RefreshAll();
             CategoriesChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        /// <summary>Exports every category (fixed and custom, active and inactive) to a CSV
+        /// file. Password-protected since it's a bulk data-access action, matching Import.</summary>
+        private void ExportBtn_Click(object sender, EventArgs e)
+        {
+            if (!AuthGate.RequireAdminPassword(this)) return;
+
+            using (var dlg = new SaveFileDialog { Filter = "Fichier CSV (*.csv)|*.csv", FileName = "categories.csv" })
+            {
+                if (dlg.ShowDialog() != DialogResult.OK) return;
+                try
+                {
+                    _importExport.ExportCategories(dlg.FileName);
+                    MessageBox.Show("Categories exportees avec succes.", "Termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Echec de l'export :\n" + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        /// <summary>Imports categories from a CSV file (as produced by Export). Any category
+        /// whose name already exists (case-insensitive) is skipped - never overwritten, never
+        /// duplicated - so importing the same file twice is always safe.</summary>
+        private void ImportBtn_Click(object sender, EventArgs e)
+        {
+            if (!AuthGate.RequireAdminPassword(this)) return;
+
+            using (var dlg = new OpenFileDialog { Filter = "Fichier CSV (*.csv)|*.csv" })
+            {
+                if (dlg.ShowDialog() != DialogResult.OK) return;
+                try
+                {
+                    var result = _importExport.ImportCategories(dlg.FileName);
+                    RefreshAll();
+                    CategoriesChanged?.Invoke(this, EventArgs.Empty);
+
+                    string msg = $"{result.Added} categorie(s) ajoutee(s), {result.SkippedDuplicates} deja existante(s) ignoree(s).";
+                    if (result.Errors.Count > 0)
+                        msg += $"\n\n{result.Errors.Count} ligne(s) ignoree(s) a cause d'un format invalide.";
+                    MessageBox.Show(msg, "Import termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Echec de l'import :\n" + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
         }
     }
 }

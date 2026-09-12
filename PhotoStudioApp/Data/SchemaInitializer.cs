@@ -71,7 +71,9 @@ namespace PhotoStudioApp.Data
                         CloseDate           TEXT NOT NULL,
                         ArchiveFolderPath   TEXT NOT NULL,
                         ClosedAt            TEXT NOT NULL,
-                        GrandTotal          REAL NOT NULL
+                        GrandTotal          REAL NOT NULL,
+                        TotalExpenses       REAL NOT NULL DEFAULT 0,
+                        NetTotal            REAL NOT NULL DEFAULT 0
                     );");
 
                 Exec(conn, @"
@@ -101,6 +103,23 @@ namespace PhotoStudioApp.Data
                         CreatedDate      TEXT NOT NULL
                     );");
 
+                Exec(conn, @"
+                    CREATE TABLE IF NOT EXISTS Expenses (
+                        Id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                        WorkDate     TEXT NOT NULL,
+                        Description  TEXT NOT NULL,
+                        Amount       REAL NOT NULL,
+                        CreatedAt    TEXT NOT NULL
+                    );");
+
+                Exec(conn, @"
+                    CREATE TABLE IF NOT EXISTS DailyCloseExpenses (
+                        Id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                        DailyCloseId   INTEGER NOT NULL REFERENCES DailyCloses(Id),
+                        Description    TEXT NOT NULL,
+                        Amount         REAL NOT NULL
+                    );");
+
                 tx.Commit();
             }
 
@@ -110,6 +129,8 @@ namespace PhotoStudioApp.Data
             AddColumnIfMissing("Categories", "HasFolder", "INTEGER NOT NULL DEFAULT 1");
             AddColumnIfMissing("CustomCharges", "LinkedCategoryId", "INTEGER REFERENCES Categories(Id)");
             AddColumnIfMissing("DailyCloseLineItems", "PurgedCount", "INTEGER NOT NULL DEFAULT 0");
+            AddColumnIfMissing("DailyCloses", "TotalExpenses", "REAL NOT NULL DEFAULT 0");
+            AddColumnIfMissing("DailyCloses", "NetTotal", "REAL NOT NULL DEFAULT 0");
 
             // Older databases created Categories.FolderRelativePath as NOT NULL, back when
             // every category had a folder. SQLite can't just drop a NOT NULL constraint with

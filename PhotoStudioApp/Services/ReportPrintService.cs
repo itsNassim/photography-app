@@ -178,7 +178,26 @@ namespace PhotoStudioApp.Services
             y += 10;
             g.DrawLine(Pens.Black, x, y, e.PageBounds.Width - x, y);
             y += 14;
-            g.DrawString($"TOTAL : {_close.GrandTotal:0.00}", _totalFont, Brushes.Black, x, y);
+            g.DrawString($"TOTAL (revenu) : {_close.GrandTotal:0.00}", _totalFont, Brushes.Black, x, y);
+            y += lineHeight + 10;
+
+            if (_close.Expenses.Count > 0)
+            {
+                g.DrawString("Depenses (achats pour le magasin) :", _bodyFont, Brushes.Black, x, y);
+                y += lineHeight;
+                foreach (var ex in _close.Expenses)
+                {
+                    string line = $"  {ex.Description,-32} = -{ex.Amount,9:0.00}";
+                    g.DrawString(line, _bodyFont, Brushes.Black, x, y);
+                    y += lineHeight;
+                }
+                g.DrawString($"Total des depenses : -{_close.TotalExpenses:0.00}", _bodyFont, Brushes.Black, x, y);
+                y += lineHeight + 6;
+                g.DrawLine(Pens.Black, x, y, e.PageBounds.Width - x, y);
+                y += 14;
+            }
+
+            g.DrawString($"TOTAL NET : {_close.NetTotal:0.00}", _totalFont, Brushes.Black, x, y);
 
             e.HasMorePages = false;
         }
@@ -202,7 +221,7 @@ namespace PhotoStudioApp.Services
 
             foreach (var day in _monthDays)
             {
-                string line = $"{day.CloseDate,-16} {"",4}   {"",8} = {day.GrandTotal,10:0.00}";
+                string line = $"{day.CloseDate,-16} revenu {day.GrandTotal,10:0.00}   depenses -{day.TotalExpenses,8:0.00}   net {day.NetTotal,10:0.00}";
                 g.DrawString(line, _bodyFont, Brushes.Black, x, y);
                 y += lineHeight;
             }
@@ -210,7 +229,11 @@ namespace PhotoStudioApp.Services
             y += 10;
             g.DrawLine(Pens.Black, x, y, e.PageBounds.Width - x, y);
             y += 14;
-            g.DrawString($"TOTAL DU MOIS : {_monthSummary.TotalRevenue:0.00}", _totalFont, Brushes.Black, x, y);
+            g.DrawString($"TOTAL DU MOIS (revenu) : {_monthSummary.TotalRevenue:0.00}", _totalFont, Brushes.Black, x, y);
+            y += lineHeight;
+            g.DrawString($"Total des depenses du mois : -{_monthSummary.TotalExpenses:0.00}", _bodyFont, Brushes.Black, x, y);
+            y += lineHeight;
+            g.DrawString($"TOTAL NET DU MOIS : {_monthSummary.NetRevenue:0.00}", _totalFont, Brushes.Black, x, y);
 
             e.HasMorePages = false;
         }

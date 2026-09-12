@@ -105,12 +105,14 @@
     <Compile Include="Models\CustomCharge.cs" />
     <Compile Include="Models\DailyClose.cs" />
     <Compile Include="Models\PendingBalance.cs" />
+    <Compile Include="Models\Expense.cs" />
     <Compile Include="Models\AppSettings.cs" />
     <Compile Include="Data\Db.cs" />
     <Compile Include="Data\SchemaInitializer.cs" />
     <Compile Include="Data\CategoryRepository.cs" />
     <Compile Include="Data\StockRepository.cs" />
     <Compile Include="Data\PendingBalanceRepository.cs" />
+    <Compile Include="Data\ExpenseRepository.cs" />
     <Compile Include="Data\CustomChargeRepository.cs" />
     <Compile Include="Data\DailyCloseRepository.cs" />
     <Compile Include="Data\SettingsRepository.cs" />
@@ -121,6 +123,7 @@
     <Compile Include="Services\WorkdayCalculator.cs" />
     <Compile Include="Services\AppCulture.cs" />
     <Compile Include="Services\ArchiveCleanupService.cs" />
+    <Compile Include="Services\ImportExportService.cs" />
     <Compile Include="UI\Theme.cs" />
     <Compile Include="UI\IconGlyphs.cs" />
     <Compile Include="UI\AuthGate.cs" />
@@ -133,6 +136,7 @@
     <Compile Include="UI\Dialogs\AddEditCategoryDialog.cs" />
     <Compile Include="UI\Dialogs\AddEditStockDialog.cs" />
     <Compile Include="UI\Dialogs\AddCustomChargeDialog.cs" />
+    <Compile Include="UI\Dialogs\AddExpenseDialog.cs" />
     <Compile Include="UI\Dialogs\PasswordPromptDialog.cs" />
     <Compile Include="UI\Dialogs\SetPasswordDialog.cs" />
     <Compile Include="UI\Dialogs\TypeToConfirmDialog.cs" />

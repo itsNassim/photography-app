@@ -116,7 +116,9 @@ namespace PhotoStudioApp.UI
             Theme.StyleGrid(_grid);
             _grid.Columns.Add("Date", "Date de cloture");
             _grid.Columns.Add("ClosedAt", "Cloturee le");
-            _grid.Columns.Add("Total", "Total");
+            _grid.Columns.Add("Total", "Revenu");
+            _grid.Columns.Add("Expenses", "Depenses");
+            _grid.Columns.Add("Net", "Net");
             _grid.Columns.Add("Archive", "Dossier d'archive");
             _grid.CellDoubleClick += (s, e) => OpenSelected();
             gridPanel.Controls.Add(_grid);
@@ -153,6 +155,8 @@ namespace PhotoStudioApp.UI
             _monthGrid.Columns.Add("Month", "Mois");
             _monthGrid.Columns.Add("Days", "Journees cloturees");
             _monthGrid.Columns.Add("Total", "Revenu total du mois");
+            _monthGrid.Columns.Add("Expenses", "Depenses du mois");
+            _monthGrid.Columns.Add("Net", "Net du mois");
             _monthGrid.CellDoubleClick += (s, e) => OpenSelectedMonth();
             monthGridPanel.Controls.Add(_monthGrid);
             monthRoot.Controls.Add(monthGridPanel, 0, 2);
@@ -213,7 +217,8 @@ namespace PhotoStudioApp.UI
             _grid.Rows.Clear();
             foreach (var h in history)
             {
-                int idx = _grid.Rows.Add(h.CloseDate, h.ClosedAt.ToString("g"), h.GrandTotal.ToString("0.00"), h.ArchiveFolderPath);
+                int idx = _grid.Rows.Add(h.CloseDate, h.ClosedAt.ToString("g"), h.GrandTotal.ToString("0.00"),
+                    h.TotalExpenses.ToString("0.00"), h.NetTotal.ToString("0.00"), h.ArchiveFolderPath);
                 _grid.Rows[idx].Tag = h.Id;
             }
             LoadMonthSummaries();
@@ -226,7 +231,8 @@ namespace PhotoStudioApp.UI
             _monthGrid.Rows.Clear();
             foreach (var m in summaries)
             {
-                int idx = _monthGrid.Rows.Add(m.MonthLabel, m.DaysClosed, m.TotalRevenue.ToString("0.00"));
+                int idx = _monthGrid.Rows.Add(m.MonthLabel, m.DaysClosed, m.TotalRevenue.ToString("0.00"),
+                    m.TotalExpenses.ToString("0.00"), m.NetRevenue.ToString("0.00"));
                 _monthGrid.Rows[idx].Tag = m.YearMonth;
             }
         }
