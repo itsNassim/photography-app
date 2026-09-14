@@ -28,6 +28,18 @@ namespace PhotoStudioApp.Models
         /// archives" action in History. 0 means the feature is off (nothing is ever auto-flagged).</summary>
         public int ArchiveRetentionDays { get; set; } = 0;
 
+        /// <summary>Master on/off for the "Archiver la journee (sans revenu)" feature - a way
+        /// for a worker to close/archive the day without ever seeing the revenue figures.
+        /// Controlled from the History/Archive tab. When false, the whole feature is hidden in
+        /// Parametres regardless of WorkerArchiveArmed below.</summary>
+        public bool WorkerArchiveFeatureEnabled { get; set; } = false;
+
+        /// <summary>One-shot arming switch for the worker-archive button in Parametres - an
+        /// admin turns this on to make the button clickable for exactly one use; the button
+        /// (and this switch) automatically turn back off the moment it's used, so it has to be
+        /// re-armed every time.</summary>
+        public bool WorkerArchiveArmed { get; set; } = false;
+
         public static readonly List<string> AllWeekdayNames = new List<string>
         {
             "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"

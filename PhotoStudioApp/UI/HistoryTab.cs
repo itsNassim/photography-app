@@ -14,6 +14,7 @@ namespace PhotoStudioApp.UI
         private readonly SettingsRepository _settingsRepo = new SettingsRepository();
         private DataGridView _grid;
         private DataGridView _monthGrid;
+        private CheckBox _workerArchiveFeatureCheck;
         private Panel _lockedPanel;
         private Panel _contentPanel;
         private bool _unlocked;
@@ -73,7 +74,8 @@ namespace PhotoStudioApp.UI
             innerTabs.SelectedIndexChanged += (s, e) => { if (innerTabs.SelectedTab == monthPage) LoadMonthSummaries(); };
 
             // --- Sub-tab: Journées (list of closed days) ---
-            var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, ColumnCount = 1, Padding = new Padding(16) };
+            var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, ColumnCount = 1, Padding = new Padding(16) };
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -111,6 +113,20 @@ namespace PhotoStudioApp.UI
             toolbar.Controls.Add(clearAllBtn);
             root.Controls.Add(toolbar, 0, 1);
 
+            // --- Master on/off for the "Archiver la journée (sans revenu)" worker feature
+            //     (the button itself lives in Paramètres - this just controls whether it's
+            //     available there at all). ---
+            var workerArchiveRow = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 8) };
+            _workerArchiveFeatureCheck = new CheckBox
+            {
+                Text = "Autoriser l'archivage journalier sans revenu pour les employés (bouton dans Paramètres)",
+                AutoSize = true,
+                Margin = new Padding(0, 6, 0, 0)
+            };
+            _workerArchiveFeatureCheck.Click += WorkerArchiveFeatureCheck_Click;
+            workerArchiveRow.Controls.Add(_workerArchiveFeatureCheck);
+            root.Controls.Add(workerArchiveRow, 0, 2);
+
             var gridPanel = new Panel { Dock = DockStyle.Fill, BackColor = Theme.CardBackground };
             _grid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true };
             Theme.StyleGrid(_grid);
@@ -122,7 +138,7 @@ namespace PhotoStudioApp.UI
             _grid.Columns.Add("Archive", "Dossier d'archive");
             _grid.CellDoubleClick += (s, e) => OpenSelected();
             gridPanel.Controls.Add(_grid);
-            root.Controls.Add(gridPanel, 0, 2);
+            root.Controls.Add(gridPanel, 0, 3);
 
             daysPage.Controls.Add(root);
 
@@ -222,6 +238,28 @@ namespace PhotoStudioApp.UI
                 _grid.Rows[idx].Tag = h.Id;
             }
             LoadMonthSummaries();
+
+            var settings = _settingsRepo.LoadAll();
+            _workerArchiveFeatureCheck.Checked = settings.WorkerArchiveFeatureEnabled;
+        }
+
+        /// <summary>Master on/off for the whole "Archiver la journée (sans revenu)" worker
+        /// feature - password-protected in both directions since it controls whether a
+        /// no-password-needed close-day button becomes available at all in Paramètres.</summary>
+        private void WorkerArchiveFeatureCheck_Click(object sender, EventArgs e)
+        {
+            bool wantsEnabled = _workerArchiveFeatureCheck.Checked;
+            if (!AuthGate.RequireAdminPassword(this))
+            {
+                _workerArchiveFeatureCheck.Checked = !wantsEnabled;
+                return;
+            }
+
+            var settings = _settingsRepo.LoadAll();
+            settings.WorkerArchiveFeatureEnabled = wantsEnabled;
+            if (!wantsEnabled)
+                settings.WorkerArchiveArmed = false; // never leave it armed once the feature itself is off
+            _settingsRepo.SaveAll(settings);
         }
 
         private void LoadMonthSummaries()

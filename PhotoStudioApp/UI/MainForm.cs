@@ -60,6 +60,7 @@ namespace PhotoStudioApp.UI
             _stockTab.StockChanged += (s, e) => _homeTab.RefreshCustomChargeStockOptions();
             _settingsTab.SettingsSaved += (s, e) => { _homeTab.RefreshAll(); _homeTab.SetupFolderWatchers(); };
             _homeTab.DayClosed += (s, e) => { _historyTab.RefreshAll(); _homeTab.SetupFolderWatchers(); };
+            _settingsTab.DayClosed += (s, e) => { _historyTab.RefreshAll(); _homeTab.RefreshAll(); _homeTab.SetupFolderWatchers(); };
 
             homeTabPage.Controls.Add(_homeTab);
             stockTabPage.Controls.Add(_stockTab);

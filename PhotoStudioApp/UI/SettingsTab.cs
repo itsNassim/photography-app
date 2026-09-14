@@ -11,8 +11,10 @@ namespace PhotoStudioApp.UI
     public class SettingsTab : UserControl
     {
         public event EventHandler SettingsSaved;
+        public event EventHandler DayClosed;
 
         private readonly SettingsRepository _repo = new SettingsRepository();
+        private readonly ClosingService _closingService = new ClosingService();
 
         private TextBox _studioPathBox;
         private TextBox _archivePathBox;
@@ -24,6 +26,9 @@ namespace PhotoStudioApp.UI
         private TextBox _newPrefixBox;
         private NumericUpDown _retentionDaysBox;
         private DateTimePicker _currentWorkDatePicker;
+        private CheckBox _workerArchiveArmedCheck;
+        private Button _workerArchiveBtn;
+        private Label _workerArchiveDisabledLabel;
 
         /// <summary>Plain struct instead of a C# tuple - named-tuple syntax needs the
         /// ValueTuple types, which only became part of mscorlib in .NET Framework 4.7+; on
@@ -199,6 +204,32 @@ namespace PhotoStudioApp.UI
             }, 2, row);
             row++;
 
+            AddLabel(card, "Archivage pour les employés\n(sans montrer le revenu) :", row);
+            var workerArchivePanel = new TableLayoutPanel { AutoSize = true, ColumnCount = 1 };
+            _workerArchiveDisabledLabel = new Label
+            {
+                Text = "Fonctionnalité désactivée - activez-la dans l'onglet Historique.",
+                AutoSize = true, ForeColor = System.Drawing.Color.Gray, Margin = new Padding(0, 8, 0, 0)
+            };
+            var armRow = new FlowLayoutPanel { AutoSize = true };
+            _workerArchiveArmedCheck = new CheckBox { Text = "Activer le bouton pour une utilisation", AutoSize = true, Margin = new Padding(0, 6, 0, 0) };
+            _workerArchiveArmedCheck.Click += WorkerArchiveArmedCheck_Click;
+            armRow.Controls.Add(_workerArchiveArmedCheck);
+            _workerArchiveBtn = Theme.MakeSecondaryButton("Archiver la journée (sans revenu)");
+            _workerArchiveBtn.Width = 260;
+            _workerArchiveBtn.Margin = new Padding(0, 4, 0, 0);
+            _workerArchiveBtn.Click += WorkerArchiveBtn_Click;
+            workerArchivePanel.Controls.Add(_workerArchiveDisabledLabel);
+            workerArchivePanel.Controls.Add(armRow);
+            workerArchivePanel.Controls.Add(_workerArchiveBtn);
+            card.Controls.Add(workerArchivePanel, 1, row);
+            card.Controls.Add(new Label
+            {
+                Text = "Archive les photos et démarre une nouvelle\njournée sans jamais afficher de montant -\nun employé peut l'utiliser en toute sécurité.\nSe redésactive automatiquement après usage.",
+                AutoSize = true, ForeColor = System.Drawing.Color.Gray, Margin = new Padding(3, 8, 0, 0)
+            }, 2, row);
+            row++;
+
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.Controls.Add(card);
 
@@ -281,6 +312,80 @@ namespace PhotoStudioApp.UI
 
             if (DateTime.TryParseExact(s.CurrentWorkDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out DateTime workDate))
                 _currentWorkDatePicker.Value = workDate;
+
+            _workerArchiveDisabledLabel.Visible = !s.WorkerArchiveFeatureEnabled;
+            _workerArchiveArmedCheck.Visible = s.WorkerArchiveFeatureEnabled;
+            _workerArchiveArmedCheck.Enabled = s.WorkerArchiveFeatureEnabled;
+            _workerArchiveArmedCheck.Checked = s.WorkerArchiveFeatureEnabled && s.WorkerArchiveArmed;
+            _workerArchiveBtn.Visible = s.WorkerArchiveFeatureEnabled;
+            _workerArchiveBtn.Enabled = s.WorkerArchiveFeatureEnabled && s.WorkerArchiveArmed;
+        }
+
+        /// <summary>Arming this makes the "Archiver la journée" button clickable for exactly
+        /// one use - a worker can then close/archive the day themselves without ever seeing
+        /// revenue figures. No password here: this switch is purely a misclick safeguard (so
+        /// the button doesn't sit clickable by accident), not a security gate - the real
+        /// security gate is the master on/off for the whole feature in the Historique tab.</summary>
+        private void WorkerArchiveArmedCheck_Click(object sender, EventArgs e)
+        {
+            var s = _repo.LoadAll();
+            s.WorkerArchiveArmed = _workerArchiveArmedCheck.Checked;
+            _repo.SaveAll(s);
+            RefreshAll();
+        }
+
+        /// <summary>Archives today's photos and starts a new day WITHOUT ever showing revenue -
+        /// safe for a worker to click once an admin has armed it above. Automatically disarms
+        /// itself (button + switch both go back to disabled) the moment it's used, successfully
+        /// or not, so it always needs to be re-armed for the next use.</summary>
+        private void WorkerArchiveBtn_Click(object sender, EventArgs e)
+        {
+            var settings = _repo.LoadAll();
+            if (!settings.WorkerArchiveFeatureEnabled || !settings.WorkerArchiveArmed)
+            {
+                RefreshAll(); // defensive - button shouldn't be clickable in this state at all
+                return;
+            }
+
+            if (MessageBox.Show(
+                "Ceci va archiver les photos du jour et démarrer une nouvelle journée. Continuer ?",
+                "Confirmer l'archivage", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                return;
+
+            try
+            {
+                try
+                {
+                    _closingService.CloseDay();
+                }
+                catch (EmptyDayException ex)
+                {
+                    if (MessageBox.Show(ex.Message, "Journée vide", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                        return;
+                    _closingService.CloseDay(confirmedEmptyDay: true);
+                }
+
+                MessageBox.Show("Journée archivée avec succès. Une nouvelle journée a commencé.", "Terminé", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                DayClosed?.Invoke(this, EventArgs.Empty);
+            }
+            catch (CloseDayException ex)
+            {
+                MessageBox.Show(ex.Message, "Impossible d'archiver la journée", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Une erreur inattendue est survenue lors de l'archivage :\n" + ex.Message,
+                    "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                // Always disarm after a use attempt (successful or not) - never leaves the
+                // button sitting armed/clickable unattended.
+                settings = _repo.LoadAll();
+                settings.WorkerArchiveArmed = false;
+                _repo.SaveAll(settings);
+                RefreshAll();
+            }
         }
 
         /// <summary>Lets an admin correct today's working date (e.g. the studio forgot to close

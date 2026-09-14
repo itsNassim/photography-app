@@ -42,7 +42,9 @@ namespace PhotoStudioApp.Data
                 CurrentWorkDate = Get("CurrentWorkDate"),
                 MaxPasswordAttempts = int.TryParse(Get("MaxPasswordAttempts", "5"), out var n) ? n : 5,
                 PurgedFilePrefixesCsv = Get("PurgedFilePrefixesCsv", "re,GSW"),
-                ArchiveRetentionDays = int.TryParse(Get("ArchiveRetentionDays", "0"), out var ard) ? ard : 0
+                ArchiveRetentionDays = int.TryParse(Get("ArchiveRetentionDays", "0"), out var ard) ? ard : 0,
+                WorkerArchiveFeatureEnabled = Get("WorkerArchiveFeatureEnabled", "0") == "1",
+                WorkerArchiveArmed = Get("WorkerArchiveArmed", "0") == "1"
             };
         }
 
@@ -58,6 +60,8 @@ namespace PhotoStudioApp.Data
             Set("MaxPasswordAttempts", s.MaxPasswordAttempts.ToString());
             Set("PurgedFilePrefixesCsv", s.PurgedFilePrefixesCsv);
             Set("ArchiveRetentionDays", s.ArchiveRetentionDays.ToString());
+            Set("WorkerArchiveFeatureEnabled", s.WorkerArchiveFeatureEnabled ? "1" : "0");
+            Set("WorkerArchiveArmed", s.WorkerArchiveArmed ? "1" : "0");
         }
     }
 }
