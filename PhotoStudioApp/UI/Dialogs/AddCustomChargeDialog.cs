@@ -325,7 +325,7 @@ namespace PhotoStudioApp.UI.Dialogs
             }
             else if (shortfall > 0.005m)
             {
-                _pendingRepo.Add(_descBox.Text.Trim(), shortfall, DateTime.Now.ToString("yyyy-MM-dd"));
+                _pendingRepo.Add(_descBox.Text.Trim(), total, shortfall, DateTime.Now.ToString("yyyy-MM-dd"));
             }
 
             DialogResult = DialogResult.OK;

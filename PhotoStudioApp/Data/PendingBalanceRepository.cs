@@ -12,7 +12,7 @@ namespace PhotoStudioApp.Data
             var list = new List<PendingBalance>();
             using (var conn = Db.OpenConnection())
             using (var cmd = new SQLiteCommand(@"
-                SELECT Id, Description, RemainingAmount, CreatedDate
+                SELECT Id, Description, TotalAmount, RemainingAmount, CreatedDate
                 FROM PendingBalances ORDER BY CreatedDate ASC, Id ASC;", conn))
             using (var r = cmd.ExecuteReader())
             {
@@ -22,8 +22,9 @@ namespace PhotoStudioApp.Data
                     {
                         Id = r.GetInt32(0),
                         Description = r.GetString(1),
-                        RemainingAmount = Convert.ToDecimal(r.GetDouble(2)),
-                        CreatedDate = r.GetString(3)
+                        TotalAmount = Convert.ToDecimal(r.GetDouble(2)),
+                        RemainingAmount = Convert.ToDecimal(r.GetDouble(3)),
+                        CreatedDate = r.GetString(4)
                     });
                 }
             }
@@ -34,7 +35,7 @@ namespace PhotoStudioApp.Data
         {
             using (var conn = Db.OpenConnection())
             using (var cmd = new SQLiteCommand(@"
-                SELECT Id, Description, RemainingAmount, CreatedDate
+                SELECT Id, Description, TotalAmount, RemainingAmount, CreatedDate
                 FROM PendingBalances WHERE Id=@id;", conn))
             {
                 cmd.Parameters.AddWithValue("@id", id);
@@ -45,8 +46,9 @@ namespace PhotoStudioApp.Data
                     {
                         Id = r.GetInt32(0),
                         Description = r.GetString(1),
-                        RemainingAmount = Convert.ToDecimal(r.GetDouble(2)),
-                        CreatedDate = r.GetString(3)
+                        TotalAmount = Convert.ToDecimal(r.GetDouble(2)),
+                        RemainingAmount = Convert.ToDecimal(r.GetDouble(3)),
+                        CreatedDate = r.GetString(4)
                     };
                 }
             }
@@ -54,15 +56,16 @@ namespace PhotoStudioApp.Data
 
         /// <summary>Creates a new pending balance (the unpaid remainder of a charge) and returns
         /// its new Id.</summary>
-        public int Add(string description, decimal remainingAmount, string createdDate)
+        public int Add(string description, decimal totalAmount, decimal remainingAmount, string createdDate)
         {
             using (var conn = Db.OpenConnection())
             using (var cmd = new SQLiteCommand(@"
-                INSERT INTO PendingBalances (Description, RemainingAmount, CreatedDate)
-                VALUES (@desc, @amt, @date);
+                INSERT INTO PendingBalances (Description, TotalAmount, RemainingAmount, CreatedDate)
+                VALUES (@desc, @total, @amt, @date);
                 SELECT last_insert_rowid();", conn))
             {
                 cmd.Parameters.AddWithValue("@desc", description);
+                cmd.Parameters.AddWithValue("@total", totalAmount);
                 cmd.Parameters.AddWithValue("@amt", remainingAmount);
                 cmd.Parameters.AddWithValue("@date", createdDate);
                 return Convert.ToInt32((long)cmd.ExecuteScalar());

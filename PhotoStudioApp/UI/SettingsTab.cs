@@ -204,7 +204,7 @@ namespace PhotoStudioApp.UI
             }, 2, row);
             row++;
 
-            AddLabel(card, "Archivage pour les employés\n(sans montrer le revenu) :", row);
+            AddLabel(card, "Archiver :", row);
             var workerArchivePanel = new TableLayoutPanel { AutoSize = true, ColumnCount = 1 };
             _workerArchiveDisabledLabel = new Label
             {
@@ -215,7 +215,7 @@ namespace PhotoStudioApp.UI
             _workerArchiveArmedCheck = new CheckBox { Text = "Activer le bouton pour une utilisation", AutoSize = true, Margin = new Padding(0, 6, 0, 0) };
             _workerArchiveArmedCheck.Click += WorkerArchiveArmedCheck_Click;
             armRow.Controls.Add(_workerArchiveArmedCheck);
-            _workerArchiveBtn = Theme.MakeSecondaryButton("Archiver la journée (sans revenu)");
+            _workerArchiveBtn = Theme.MakeSecondaryButton("Archiver");
             _workerArchiveBtn.Width = 260;
             _workerArchiveBtn.Margin = new Padding(0, 4, 0, 0);
             _workerArchiveBtn.Click += WorkerArchiveBtn_Click;
@@ -223,11 +223,6 @@ namespace PhotoStudioApp.UI
             workerArchivePanel.Controls.Add(armRow);
             workerArchivePanel.Controls.Add(_workerArchiveBtn);
             card.Controls.Add(workerArchivePanel, 1, row);
-            card.Controls.Add(new Label
-            {
-                Text = "Archive les photos et démarre une nouvelle\njournée sans jamais afficher de montant -\nun employé peut l'utiliser en toute sécurité.\nSe redésactive automatiquement après usage.",
-                AutoSize = true, ForeColor = System.Drawing.Color.Gray, Margin = new Padding(3, 8, 0, 0)
-            }, 2, row);
             row++;
 
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));

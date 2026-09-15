@@ -99,6 +99,7 @@ namespace PhotoStudioApp.Data
                     CREATE TABLE IF NOT EXISTS PendingBalances (
                         Id               INTEGER PRIMARY KEY AUTOINCREMENT,
                         Description      TEXT NOT NULL,
+                        TotalAmount      REAL NOT NULL DEFAULT 0,
                         RemainingAmount  REAL NOT NULL,
                         CreatedDate      TEXT NOT NULL
                     );");
@@ -131,6 +132,21 @@ namespace PhotoStudioApp.Data
             AddColumnIfMissing("DailyCloseLineItems", "PurgedCount", "INTEGER NOT NULL DEFAULT 0");
             AddColumnIfMissing("DailyCloses", "TotalExpenses", "REAL NOT NULL DEFAULT 0");
             AddColumnIfMissing("DailyCloses", "NetTotal", "REAL NOT NULL DEFAULT 0");
+            AddColumnIfMissing("PendingBalances", "TotalAmount", "REAL NOT NULL DEFAULT 0");
+
+            // Self-healing backfill (same pattern/lesson as the NetTotal fix above - see
+            // areas/photostudio-app.md bug #13): a balance created before TotalAmount existed
+            // has TotalAmount=0 from the column's DEFAULT, which is wrong. The true original
+            // total isn't recoverable for those old rows (only RemainingAmount was ever
+            // tracked), so RemainingAmount is the best available approximation - this only
+            // matters for balances that existed before this update and haven't been touched
+            // since; every new balance going forward gets its real TotalAmount from
+            // AddCustomChargeDialog at creation time. Runs every startup, safe/idempotent: only
+            // touches rows where TotalAmount is still 0.
+            using (var conn = Db.OpenConnection())
+            using (var cmd = new SQLiteCommand(
+                "UPDATE PendingBalances SET TotalAmount = RemainingAmount WHERE TotalAmount = 0;", conn))
+                cmd.ExecuteNonQuery();
 
             // SELF-HEALING FIX (not just a one-time migration): a stale NetTotal=0 can exist not
             // only right when the column is first added, but also on any database that already

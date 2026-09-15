@@ -26,9 +26,17 @@ namespace PhotoStudioApp.UI
             BuildLayout();
         }
 
+        /// <summary>Extracts the icon directly from THIS running .exe's own embedded resource
+        /// (the one baked in at compile time via the csproj's ApplicationIcon/win32icon) instead
+        /// of loading a loose Properties\app.ico file from disk. This is what actually shows in
+        /// the taskbar and the window's title bar while the app is running - loading from a
+        /// relative file path was fragile (it depended on that exact file being deployed
+        /// alongside the exe in the exact expected relative folder, which an installer's file
+        /// layout doesn't guarantee), whereas the icon embedded in the exe itself is always
+        /// there, guaranteed, with zero extra deployment steps.</summary>
         private Icon TryLoadIcon()
         {
-            try { return new Icon(System.IO.Path.Combine(Application.StartupPath, "Properties", "app.ico")); }
+            try { return Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
             catch { return null; }
         }
 

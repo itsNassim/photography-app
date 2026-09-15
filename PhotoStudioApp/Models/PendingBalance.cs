@@ -8,10 +8,13 @@
     {
         public int Id { get; set; }
         public string Description { get; set; }
+        /// <summary>The full original price of the charge this balance came from (what the
+        /// client was actually charged in total, not just what's still owed).</summary>
+        public decimal TotalAmount { get; set; }
         public decimal RemainingAmount { get; set; }
-        /// <summary>yyyy-MM-dd - the work date the balance was first created on. Informational
-        /// only: the eventual payment always counts toward whatever day it's actually paid on,
-        /// not this date.</summary>
+        /// <summary>yyyy-MM-dd - the work date the balance was first created on (i.e. the day
+        /// the client bought/was charged). Informational only: the eventual payment always
+        /// counts toward whatever day it's actually paid on, not this date.</summary>
         public string CreatedDate { get; set; }
     }
 }

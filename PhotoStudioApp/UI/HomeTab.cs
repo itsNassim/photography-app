@@ -153,6 +153,9 @@ namespace PhotoStudioApp.UI
             var payBalanceBtn = Theme.MakePrimaryButton("Payer");
             payBalanceBtn.Width = 110;
             payBalanceBtn.Click += PayBalanceBtn_Click;
+            var deleteBalanceBtn = Theme.MakeDangerButton("Supprimer");
+            deleteBalanceBtn.Width = 110;
+            deleteBalanceBtn.Click += DeleteBalanceBtn_Click;
             var refreshPendingBtn = Theme.MakeSecondaryButton("Actualiser");
             refreshPendingBtn.Image = IconGlyphs.Refresh(16);
             refreshPendingBtn.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
@@ -161,13 +164,16 @@ namespace PhotoStudioApp.UI
             refreshPendingBtn.Click += (s, e) => RefreshPendingBalances();
             pendingHeader.Controls.Add(pendingTitle);
             pendingHeader.Controls.Add(payBalanceBtn);
+            pendingHeader.Controls.Add(deleteBalanceBtn);
             pendingHeader.Controls.Add(refreshPendingBtn);
 
             var pendingPanel = new Panel { Dock = DockStyle.Fill, BackColor = Theme.CardBackground };
             _pendingGrid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true };
             Theme.StyleGrid(_pendingGrid);
             _pendingGrid.Columns.Add("Description", "Description");
+            _pendingGrid.Columns.Add("Total", "Total achete");
             _pendingGrid.Columns.Add("Remaining", "Reste a payer");
+            _pendingGrid.Columns.Add("Date", "Date d'achat");
             _pendingGrid.CellDoubleClick += (s, e) => PayBalanceBtn_Click(s, e);
             pendingPanel.Controls.Add(_pendingGrid);
 
@@ -287,9 +293,33 @@ namespace PhotoStudioApp.UI
             _pendingGrid.Rows.Clear();
             foreach (var b in balances)
             {
-                int rowIdx = _pendingGrid.Rows.Add(b.Description, b.RemainingAmount.ToString("0.00"));
+                int rowIdx = _pendingGrid.Rows.Add(b.Description, b.TotalAmount.ToString("0.00"), b.RemainingAmount.ToString("0.00"), b.CreatedDate);
                 _pendingGrid.Rows[rowIdx].Tag = b.Id;
             }
+        }
+
+        /// <summary>Manually removes a pending balance without it ever being paid off - e.g. the
+        /// studio decides to write it off, or it was created by mistake. Unlike paying it down,
+        /// this never creates a CustomCharge/revenue entry - the balance just disappears.</summary>
+        private void DeleteBalanceBtn_Click(object sender, EventArgs e)
+        {
+            if (_pendingGrid.CurrentRow?.Tag == null)
+            {
+                MessageBox.Show("Selectionnez d'abord un solde dans la liste.", "Aucune selection", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            int id = (int)_pendingGrid.CurrentRow.Tag;
+            var balance = _pendingRepo.GetById(id);
+            if (balance == null) return;
+
+            if (MessageBox.Show(
+                $"Supprimer definitivement le solde en attente \"{balance.Description}\" (reste : {balance.RemainingAmount:0.00}) ?\n\n" +
+                "Cette action ne cree aucune charge/revenu - le solde disparait simplement sans avoir ete paye.",
+                "Confirmer la suppression", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                return;
+
+            _pendingRepo.Delete(id);
+            RefreshPendingBalances();
         }
 
         private void PayBalanceBtn_Click(object sender, EventArgs e)
