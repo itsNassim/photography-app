@@ -35,6 +35,7 @@ namespace PhotoStudioApp.UI
         // _watchDebounce coalesces bursts of events (e.g. copying 40 photos at once) into a
         // single UI refresh a few hundred ms later, rather than refreshing 40 times in a row.
         private readonly List<FileSystemWatcher> _folderWatchers = new List<FileSystemWatcher>();
+        private readonly Dictionary<FileSystemWatcher, string> _watcherCategoryNames = new Dictionary<FileSystemWatcher, string>();
         private Timer _watchDebounce;
 
         public HomeTab()
@@ -428,6 +429,7 @@ namespace PhotoStudioApp.UI
                 w.Dispose();
             }
             _folderWatchers.Clear();
+            _watcherCategoryNames.Clear();
 
             var settings = _settingsRepo.LoadAll();
             if (string.IsNullOrWhiteSpace(settings.StudioRootPath))
@@ -455,6 +457,7 @@ namespace PhotoStudioApp.UI
                     watcher.Changed += FolderWatcher_Changed;
                     watcher.EnableRaisingEvents = true;
                     _folderWatchers.Add(watcher);
+                    _watcherCategoryNames[watcher] = cat.Name;
                 }
                 catch
                 {
@@ -467,6 +470,8 @@ namespace PhotoStudioApp.UI
 
         private void FolderWatcher_Changed(object sender, FileSystemEventArgs e)
         {
+            LogStudioFileEvent(sender, e);
+
             // FileSystemWatcher events arrive on a background thread - marshal back to the UI
             // thread and (re)start the debounce timer so a burst of events collapses into one
             // refresh shortly after activity settles down.
@@ -482,6 +487,53 @@ namespace PhotoStudioApp.UI
             }
             catch (ObjectDisposedException) { /* form closing - ignore */ }
             catch (InvalidOperationException) { /* handle not yet created - ignore */ }
+        }
+
+        /// <summary>Records a file entering/leaving/being renamed in a category folder into the
+        /// studio action log (Archive tab). "Changed" (a plain write, e.g. mid-copy) is not
+        /// logged - too noisy and not a meaningful action on its own; only the file's arrival,
+        /// removal, or rename is. Skipped entirely while StudioLogSuppressor is active, i.e.
+        /// during the app's own routine close-day purge/archive - those are logged explicitly
+        /// and more informatively by FolderCountService instead (see its comments), so logging
+        /// them again here would both duplicate and mislabel them (a photo safely moved to the
+        /// archive would otherwise show up here as a plain "Suppression").</summary>
+        private void LogStudioFileEvent(object sender, FileSystemEventArgs e)
+        {
+            try
+            {
+                if (e.ChangeType == WatcherChangeTypes.Changed) return;
+                if (StudioLogSuppressor.IsSuppressed) return;
+
+                var watcher = sender as FileSystemWatcher;
+                string categoryName = (watcher != null && _watcherCategoryNames.TryGetValue(watcher, out var name)) ? name : null;
+                string fileName = Path.GetFileName(e.FullPath);
+
+                string action;
+                string details = null;
+                switch (e.ChangeType)
+                {
+                    case WatcherChangeTypes.Created:
+                        action = "Entrée (nouveau fichier)";
+                        break;
+                    case WatcherChangeTypes.Deleted:
+                        action = "Suppression";
+                        break;
+                    case WatcherChangeTypes.Renamed:
+                        action = "Renommage";
+                        var renamed = e as RenamedEventArgs;
+                        if (renamed != null)
+                            details = $"Ancien nom : {Path.GetFileName(renamed.OldFullPath)}";
+                        break;
+                    default:
+                        return;
+                }
+
+                StudioActionLogService.Record(fileName, action, categoryName, details);
+            }
+            catch
+            {
+                // Logging must never break the live folder-watching feature.
+            }
         }
 
         protected override void Dispose(bool disposing)
@@ -572,19 +624,8 @@ namespace PhotoStudioApp.UI
 
         private void CloseDayBtn_Click(object sender, EventArgs e)
         {
-            var settings = _settingsRepo.LoadAll();
-            if (string.IsNullOrEmpty(settings.PasswordHash))
-            {
-                MessageBox.Show("Aucun mot de passe de clôture n'est defini. Definissez-en un dans l'onglet Paramètres.",
-                    "Mot de passe requis", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            using (var pwd = new PasswordPromptDialog(settings.MaxPasswordAttempts))
-            {
-                if (pwd.ShowDialog() != DialogResult.OK)
-                    return; // annule ou trop de tentatives
-            }
+            if (!AuthGate.RequireAdminPassword(this, "Clôturer la journée", "Clôturer la journée"))
+                return; // annule, trop de tentatives, ou pas de mot de passe defini
 
             if (MessageBox.Show(
                 "Cette action va archiver les photos du jour, clôturer la comptabilite et demarrer une nouvelle journée. Continuer ?",

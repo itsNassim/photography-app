@@ -92,7 +92,7 @@ namespace PhotoStudioApp.UI
 
         private void AddBtn_Click(object sender, EventArgs e)
         {
-            if (!AuthGate.RequireAdminPassword(this)) return;
+            if (!AuthGate.RequireAdminPassword(this, "Ajouter une catégorie", "+ Ajouter")) return;
 
             using (var dlg = new AddEditCategoryDialog())
             {
@@ -109,7 +109,7 @@ namespace PhotoStudioApp.UI
         {
             var cat = Selected();
             if (cat == null) return;
-            if (!AuthGate.RequireAdminPassword(this)) return;
+            if (!AuthGate.RequireAdminPassword(this, "Modifier une catégorie", "Modifier")) return;
 
             using (var dlg = new AddEditCategoryDialog(cat))
             {
@@ -132,7 +132,7 @@ namespace PhotoStudioApp.UI
         {
             var cat = Selected();
             if (cat == null) return;
-            if (!AuthGate.RequireAdminPassword(this)) return;
+            if (!AuthGate.RequireAdminPassword(this, "Activer / désactiver une catégorie", "Activer / Desactiver")) return;
 
             if (cat.IsActive)
             {
@@ -153,7 +153,7 @@ namespace PhotoStudioApp.UI
         /// file. Password-protected since it's a bulk data-access action, matching Import.</summary>
         private void ExportBtn_Click(object sender, EventArgs e)
         {
-            if (!AuthGate.RequireAdminPassword(this)) return;
+            if (!AuthGate.RequireAdminPassword(this, "Exporter les catégories", "Exporter")) return;
 
             using (var dlg = new SaveFileDialog { Filter = "Fichier CSV (*.csv)|*.csv", FileName = "categories.csv" })
             {
@@ -175,7 +175,7 @@ namespace PhotoStudioApp.UI
         /// duplicated - so importing the same file twice is always safe.</summary>
         private void ImportBtn_Click(object sender, EventArgs e)
         {
-            if (!AuthGate.RequireAdminPassword(this)) return;
+            if (!AuthGate.RequireAdminPassword(this, "Importer des catégories", "Importer")) return;
 
             using (var dlg = new OpenFileDialog { Filter = "Fichier CSV (*.csv)|*.csv" })
             {

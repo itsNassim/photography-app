@@ -14,6 +14,8 @@ namespace PhotoStudioApp.UI
         private readonly SettingsRepository _settingsRepo = new SettingsRepository();
         private DataGridView _grid;
         private DataGridView _monthGrid;
+        private LoginLogsTab _loginLogsTab;
+        private StudioLogsTab _studioLogsTab;
         private CheckBox _workerArchiveFeatureCheck;
         private Panel _lockedPanel;
         private Panel _contentPanel;
@@ -69,9 +71,18 @@ namespace PhotoStudioApp.UI
             var innerTabs = new TabControl { Dock = DockStyle.Fill, Font = Theme.FontBase };
             var daysPage = new TabPage("Journées") { BackColor = Theme.Background };
             var monthPage = new TabPage("Résumé mensuel") { BackColor = Theme.Background };
+            var loginLogsPage = new TabPage("Journal de connexion") { BackColor = Theme.Background };
+            var studioLogsPage = new TabPage("Journal des actions studio") { BackColor = Theme.Background };
             innerTabs.TabPages.Add(daysPage);
             innerTabs.TabPages.Add(monthPage);
-            innerTabs.SelectedIndexChanged += (s, e) => { if (innerTabs.SelectedTab == monthPage) LoadMonthSummaries(); };
+            innerTabs.TabPages.Add(loginLogsPage);
+            innerTabs.TabPages.Add(studioLogsPage);
+            innerTabs.SelectedIndexChanged += (s, e) =>
+            {
+                if (innerTabs.SelectedTab == monthPage) LoadMonthSummaries();
+                else if (innerTabs.SelectedTab == loginLogsPage) _loginLogsTab.LoadData();
+                else if (innerTabs.SelectedTab == studioLogsPage) _studioLogsTab.LoadData();
+            };
 
             // --- Sub-tab: Journées (list of closed days) ---
             var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, ColumnCount = 1, Padding = new Padding(16) };
@@ -179,6 +190,14 @@ namespace PhotoStudioApp.UI
 
             monthPage.Controls.Add(monthRoot);
 
+            // --- Sub-tab: Journal de connexion (login logs) ---
+            _loginLogsTab = new LoginLogsTab { Dock = DockStyle.Fill };
+            loginLogsPage.Controls.Add(_loginLogsTab);
+
+            // --- Sub-tab: Journal des actions studio (studio file action logs) ---
+            _studioLogsTab = new StudioLogsTab { Dock = DockStyle.Fill };
+            studioLogsPage.Controls.Add(_studioLogsTab);
+
             _contentPanel.Controls.Add(innerTabs);
 
             Controls.Add(_contentPanel);
@@ -201,7 +220,7 @@ namespace PhotoStudioApp.UI
 
         private void TryUnlock()
         {
-            if (AuthGate.RequireAdminPassword(this))
+            if (AuthGate.RequireAdminPassword(this, "Déverrouiller l'historique", "Déverrouiller"))
             {
                 _unlocked = true;
                 ShowContent();
@@ -238,6 +257,8 @@ namespace PhotoStudioApp.UI
                 _grid.Rows[idx].Tag = h.Id;
             }
             LoadMonthSummaries();
+            _loginLogsTab.LoadData();
+            _studioLogsTab.LoadData();
 
             var settings = _settingsRepo.LoadAll();
             _workerArchiveFeatureCheck.Checked = settings.WorkerArchiveFeatureEnabled;
@@ -249,7 +270,7 @@ namespace PhotoStudioApp.UI
         private void WorkerArchiveFeatureCheck_Click(object sender, EventArgs e)
         {
             bool wantsEnabled = _workerArchiveFeatureCheck.Checked;
-            if (!AuthGate.RequireAdminPassword(this))
+            if (!AuthGate.RequireAdminPassword(this, "Activer / désactiver l'archivage sans mot de passe", "Case a cocher - archivage employé"))
             {
                 _workerArchiveFeatureCheck.Checked = !wantsEnabled;
                 return;
@@ -295,7 +316,7 @@ namespace PhotoStudioApp.UI
             var close = _repo.GetFullById(id);
             if (close == null) return;
 
-            if (!AuthGate.RequireAdminPassword(this)) return;
+            if (!AuthGate.RequireAdminPassword(this, "Supprimer une journée de l'historique", "Supprimer")) return;
 
             if (MessageBox.Show(
                 $"Retirer la journée du {close.CloseDate} de l'historique ?\n\n" +
@@ -335,7 +356,7 @@ namespace PhotoStudioApp.UI
                 return;
             }
 
-            if (!AuthGate.RequireAdminPassword(this)) return;
+            if (!AuthGate.RequireAdminPassword(this, "Garder ce mois, supprimer le reste", "Garder ce mois, supprimer le reste")) return;
 
             if (MessageBox.Show(
                 $"{candidates.Count} journée(s) en dehors du mois en cours vont etre retirees " +
@@ -371,7 +392,7 @@ namespace PhotoStudioApp.UI
                 return;
             }
 
-            if (!AuthGate.RequireAdminPassword(this)) return;
+            if (!AuthGate.RequireAdminPassword(this, "Nettoyer les anciennes archives", "Nettoyer les anciennes archives")) return;
 
             if (MessageBox.Show(
                 $"{candidates.Count} journée(s) de plus de {settings.ArchiveRetentionDays} jour(s) vont etre " +
@@ -387,7 +408,7 @@ namespace PhotoStudioApp.UI
 
         private void ClearAllBtn_Click(object sender, EventArgs e)
         {
-            if (!AuthGate.RequireAdminPassword(this)) return;
+            if (!AuthGate.RequireAdminPassword(this, "Vider tout l'historique", "Tout supprimer")) return;
 
             if (MessageBox.Show(
                 "Ceci va vider DEFINITIVEMENT tout l'historique (tous les comptes/totaux de journées).\n\n" +

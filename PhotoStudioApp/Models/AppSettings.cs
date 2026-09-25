@@ -40,6 +40,16 @@ namespace PhotoStudioApp.Models
         /// re-armed every time.</summary>
         public bool WorkerArchiveArmed { get; set; } = false;
 
+        /// <summary>Login-log entries (admin-password prompts) older than this are eligible for
+        /// automatic cleanup, run whenever the log view loads. 0 means the feature is off
+        /// (nothing is ever auto-deleted) - same convention as ArchiveRetentionDays.</summary>
+        public int LoginLogRetentionDays { get; set; } = 90;
+
+        /// <summary>Studio-action-log entries (file events in the category folders) older than
+        /// this are eligible for automatic cleanup, run whenever the log view loads. 0 means the
+        /// feature is off - same convention as ArchiveRetentionDays.</summary>
+        public int StudioLogRetentionDays { get; set; } = 90;
+
         public static readonly List<string> AllWeekdayNames = new List<string>
         {
             "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"

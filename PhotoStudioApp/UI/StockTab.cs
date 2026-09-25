@@ -145,7 +145,7 @@ namespace PhotoStudioApp.UI
 
         private void AddBtn_Click(object sender, EventArgs e)
         {
-            if (!AuthGate.RequireAdminPassword(this)) return;
+            if (!AuthGate.RequireAdminPassword(this, "Ajouter un article de stock", "+ Ajouter")) return;
 
             using (var dlg = new AddEditStockDialog())
             {
@@ -162,7 +162,7 @@ namespace PhotoStudioApp.UI
         {
             var item = SelectedItem();
             if (item == null) return;
-            if (!AuthGate.RequireAdminPassword(this)) return;
+            if (!AuthGate.RequireAdminPassword(this, "Modifier un article de stock", "Modifier")) return;
 
             using (var dlg = new AddEditStockDialog(item))
             {
@@ -181,7 +181,7 @@ namespace PhotoStudioApp.UI
         {
             var item = SelectedItem();
             if (item == null) return;
-            if (!AuthGate.RequireAdminPassword(this)) return;
+            if (!AuthGate.RequireAdminPassword(this, "Ajuster la quantité de stock", "Ajuster qte")) return;
 
             using (var form = new Form
             {
@@ -218,7 +218,7 @@ namespace PhotoStudioApp.UI
         {
             var item = SelectedItem();
             if (item == null) return;
-            if (!AuthGate.RequireAdminPassword(this)) return;
+            if (!AuthGate.RequireAdminPassword(this, "Supprimer un article de stock", "Supprimer")) return;
 
             if (MessageBox.Show($"Supprimer l'article de stock '{item.Name}' ? L'historique existant qui le mentionne n'est pas affecte.",
                 "Confirmer la suppression", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
@@ -233,7 +233,7 @@ namespace PhotoStudioApp.UI
         /// Password-protected since it's a bulk data-access action, matching Import.</summary>
         private void ExportBtn_Click(object sender, EventArgs e)
         {
-            if (!AuthGate.RequireAdminPassword(this)) return;
+            if (!AuthGate.RequireAdminPassword(this, "Exporter le stock", "Exporter")) return;
 
             using (var dlg = new SaveFileDialog { Filter = "Fichier CSV (*.csv)|*.csv", FileName = "stock.csv" })
             {
@@ -256,7 +256,7 @@ namespace PhotoStudioApp.UI
         /// twice is always safe.</summary>
         private void ImportBtn_Click(object sender, EventArgs e)
         {
-            if (!AuthGate.RequireAdminPassword(this)) return;
+            if (!AuthGate.RequireAdminPassword(this, "Importer du stock", "Importer")) return;
 
             using (var dlg = new OpenFileDialog { Filter = "Fichier CSV (*.csv)|*.csv" })
             {

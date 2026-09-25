@@ -44,7 +44,9 @@ namespace PhotoStudioApp.Data
                 PurgedFilePrefixesCsv = Get("PurgedFilePrefixesCsv", "re,GSW"),
                 ArchiveRetentionDays = int.TryParse(Get("ArchiveRetentionDays", "0"), out var ard) ? ard : 0,
                 WorkerArchiveFeatureEnabled = Get("WorkerArchiveFeatureEnabled", "0") == "1",
-                WorkerArchiveArmed = Get("WorkerArchiveArmed", "0") == "1"
+                WorkerArchiveArmed = Get("WorkerArchiveArmed", "0") == "1",
+                LoginLogRetentionDays = int.TryParse(Get("LoginLogRetentionDays", "90"), out var llrd) ? llrd : 90,
+                StudioLogRetentionDays = int.TryParse(Get("StudioLogRetentionDays", "90"), out var slrd) ? slrd : 90
             };
         }
 
@@ -62,6 +64,8 @@ namespace PhotoStudioApp.Data
             Set("ArchiveRetentionDays", s.ArchiveRetentionDays.ToString());
             Set("WorkerArchiveFeatureEnabled", s.WorkerArchiveFeatureEnabled ? "1" : "0");
             Set("WorkerArchiveArmed", s.WorkerArchiveArmed ? "1" : "0");
+            Set("LoginLogRetentionDays", s.LoginLogRetentionDays.ToString());
+            Set("StudioLogRetentionDays", s.StudioLogRetentionDays.ToString());
         }
     }
 }

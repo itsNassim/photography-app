@@ -73,38 +73,44 @@ namespace PhotoStudioApp.Services
 
             // 1) For each category folder: purge rejected files FIRST (before any copy/count),
             //    then count what's left, then remember it for the move step below.
-            foreach (var cat in categories)
+            //    Suppressed: FolderCountService already logs each purge/move explicitly and more
+            //    informatively than the raw FileSystemWatcher events they also trigger would -
+            //    see StudioLogSuppressor's own comments for why both firing would be wrong.
+            using (StudioLogSuppressor.Suppress())
             {
-                string catAbs = Path.Combine(settings.StudioRootPath, cat.FolderRelativePath);
-                if (!Directory.Exists(catAbs))
+                foreach (var cat in categories)
                 {
-                    // Not a hard failure - staff may not have used that category today.
+                    string catAbs = Path.Combine(settings.StudioRootPath, cat.FolderRelativePath);
+                    if (!Directory.Exists(catAbs))
+                    {
+                        // Not a hard failure - staff may not have used that category today.
+                        close.LineItems.Add(new DailyCloseLineItem
+                        {
+                            CategoryId = cat.Id,
+                            CategoryName = cat.Name,
+                            Count = 0,
+                            UnitPrice = cat.CurrentPrice,
+                            PurgedCount = 0
+                        });
+                        continue;
+                    }
+
+                    // Rejects/duplicates (e.g. "re...", "GSW...") are calculated (counted) first,
+                    // then deleted - the tally is kept below for the day's audit trail so nothing
+                    // is ever silently discarded without being accounted for.
+                    int purged = _folders.DeleteFilesWithPrefixes(catAbs, cat.Name, purgedPrefixes);
+
+                    int count = _folders.CountPhotos(catAbs);
+                    totalPhotosFound += count;
                     close.LineItems.Add(new DailyCloseLineItem
                     {
                         CategoryId = cat.Id,
                         CategoryName = cat.Name,
-                        Count = 0,
+                        Count = count,
                         UnitPrice = cat.CurrentPrice,
-                        PurgedCount = 0
+                        PurgedCount = purged
                     });
-                    continue;
                 }
-
-                // Rejects/duplicates (e.g. "re...", "GSW...") are calculated (counted) first,
-                // then deleted - the tally is kept below for the day's audit trail so nothing
-                // is ever silently discarded without being accounted for.
-                int purged = _folders.DeleteFilesWithPrefixes(catAbs, purgedPrefixes);
-
-                int count = _folders.CountPhotos(catAbs);
-                totalPhotosFound += count;
-                close.LineItems.Add(new DailyCloseLineItem
-                {
-                    CategoryId = cat.Id,
-                    CategoryName = cat.Name,
-                    Count = count,
-                    UnitPrice = cat.CurrentPrice,
-                    PurgedCount = purged
-                });
             }
 
             var charges = _chargeRepo.GetForWorkDate(settings.CurrentWorkDate);
@@ -127,11 +133,15 @@ namespace PhotoStudioApp.Services
             }
 
             // 2) NOW move each category's (already-purged) photos into the working folder.
-            foreach (var cat in categories)
+            //    Still suppressed - see the note on step 1 above.
+            using (StudioLogSuppressor.Suppress())
             {
-                string catAbs = Path.Combine(settings.StudioRootPath, cat.FolderRelativePath);
-                if (Directory.Exists(catAbs))
-                    _folders.MovePhotos(catAbs, workingFolderAbs);
+                foreach (var cat in categories)
+                {
+                    string catAbs = Path.Combine(settings.StudioRootPath, cat.FolderRelativePath);
+                    if (Directory.Exists(catAbs))
+                        _folders.MovePhotos(catAbs, workingFolderAbs, cat.Name);
+                }
             }
 
             // 3) Move the working folder into archiveRoot\YYYY\<mois en francais>\<dossier du jour>.
@@ -146,7 +156,8 @@ namespace PhotoStudioApp.Services
 
             try
             {
-                _folders.MoveDirectory(workingFolderAbs, archiveDest);
+                using (StudioLogSuppressor.Suppress())
+                    _folders.MoveDirectory(workingFolderAbs, archiveDest);
             }
             catch (IOException ex)
             {

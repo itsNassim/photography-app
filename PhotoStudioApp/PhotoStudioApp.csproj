@@ -107,6 +107,8 @@
     <Compile Include="Models\PendingBalance.cs" />
     <Compile Include="Models\Expense.cs" />
     <Compile Include="Models\AppSettings.cs" />
+    <Compile Include="Models\LoginLogEntry.cs" />
+    <Compile Include="Models\StudioActionLogEntry.cs" />
     <Compile Include="Data\Db.cs" />
     <Compile Include="Data\SchemaInitializer.cs" />
     <Compile Include="Data\CategoryRepository.cs" />
@@ -116,6 +118,8 @@
     <Compile Include="Data\CustomChargeRepository.cs" />
     <Compile Include="Data\DailyCloseRepository.cs" />
     <Compile Include="Data\SettingsRepository.cs" />
+    <Compile Include="Data\LoginLogRepository.cs" />
+    <Compile Include="Data\StudioActionLogRepository.cs" />
     <Compile Include="Services\PasswordService.cs" />
     <Compile Include="Services\FolderCountService.cs" />
     <Compile Include="Services\ClosingService.cs" />
@@ -124,6 +128,10 @@
     <Compile Include="Services\AppCulture.cs" />
     <Compile Include="Services\ArchiveCleanupService.cs" />
     <Compile Include="Services\ImportExportService.cs" />
+    <Compile Include="Services\LogCryptoService.cs" />
+    <Compile Include="Services\LoginLogService.cs" />
+    <Compile Include="Services\StudioActionLogService.cs" />
+    <Compile Include="Services\StudioLogSuppressor.cs" />
     <Compile Include="UI\Theme.cs" />
     <Compile Include="UI\IconGlyphs.cs" />
     <Compile Include="UI\Controls\SearchableComboBox.cs" />
@@ -133,6 +141,8 @@
     <Compile Include="UI\StockTab.cs" />
     <Compile Include="UI\CategoriesTab.cs" />
     <Compile Include="UI\HistoryTab.cs" />
+    <Compile Include="UI\LoginLogsTab.cs" />
+    <Compile Include="UI\StudioLogsTab.cs" />
     <Compile Include="UI\SettingsTab.cs" />
     <Compile Include="UI\Dialogs\AddEditCategoryDialog.cs" />
     <Compile Include="UI\Dialogs\AddEditStockDialog.cs" />

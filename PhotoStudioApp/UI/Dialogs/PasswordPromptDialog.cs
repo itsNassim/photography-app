@@ -6,8 +6,15 @@ using PhotoStudioApp.Services;
 namespace PhotoStudioApp.UI.Dialogs
 {
     /// <summary>Prompts for the admin password before a protected action proceeds (closing the
-    /// day, Stock/Categories CRUD, opening History). Locks out after the configured number of
-    /// wrong attempts (DialogResult.Cancel either way).</summary>
+    /// day, Stock/Categories CRUD, opening History, etc). Locks out after the configured number
+    /// of wrong attempts (DialogResult.Cancel either way).
+    ///
+    /// This is also the single place every one of those prompts gets recorded into the login
+    /// log (see LoginLogService): actionName/buttonLabel describe what was being protected, and
+    /// FormClosed - which fires no matter how the dialog closes (OK, Cancel button, lockout, or
+    /// the window's own X/Alt+F4) - logs exactly once with however many wrong attempts were made
+    /// and the final outcome. Centralizing it here (rather than at each of AuthGate's many call
+    /// sites) guarantees no password prompt can ever go unlogged.</summary>
     public class PasswordPromptDialog : Form
     {
         private readonly TextBox _pwdBox;
@@ -15,10 +22,16 @@ namespace PhotoStudioApp.UI.Dialogs
         private readonly int _maxAttempts;
         private int _attempts;
         private readonly SettingsRepository _settingsRepo = new SettingsRepository();
+        private readonly string _actionName;
+        private readonly string _buttonLabel;
+        private bool _logged;
 
-        public PasswordPromptDialog(int maxAttempts)
+        public PasswordPromptDialog(int maxAttempts, string actionName = null, string buttonLabel = null)
         {
             _maxAttempts = maxAttempts;
+            _actionName = string.IsNullOrWhiteSpace(actionName) ? "Action protégée" : actionName;
+            _buttonLabel = buttonLabel;
+
             Text = "Mot de passe requis";
             Width = 400;
             Height = 220;
@@ -48,6 +61,8 @@ namespace PhotoStudioApp.UI.Dialogs
 
             AcceptButton = okBtn;
             CancelButton = cancelBtn;
+
+            FormClosed += (s, e) => LogIfNeeded();
         }
 
         private void OkBtn_Click(object sender, EventArgs e)
@@ -74,6 +89,23 @@ namespace PhotoStudioApp.UI.Dialogs
             _errorLabel.Text = $"Mot de passe incorrect. {remaining} tentative(s) restante(s).";
             _pwdBox.SelectAll();
             _pwdBox.Focus();
+        }
+
+        private void LogIfNeeded()
+        {
+            if (_logged) return;
+            _logged = true;
+
+            bool success = DialogResult == DialogResult.OK;
+            string details;
+            if (success)
+                details = null;
+            else if (_attempts >= _maxAttempts)
+                details = "Verrouille - trop de tentatives incorrectes";
+            else
+                details = "Annule par l'utilisateur";
+
+            LoginLogService.Record(_actionName, _buttonLabel, _attempts, success, details);
         }
     }
 }

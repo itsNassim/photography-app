@@ -121,6 +121,25 @@ namespace PhotoStudioApp.Data
                         Amount         REAL NOT NULL
                     );");
 
+                // Login logs (every admin-password prompt) and studio action logs (every
+                // file-level event in the category folders). CreatedUtc is the only plain/
+                // queryable column - Payload holds every other field encrypted as one blob
+                // (see LogCryptoService) so the log content itself can't be read outside the
+                // app, e.g. by opening this .db file in a generic SQLite browser.
+                Exec(conn, @"
+                    CREATE TABLE IF NOT EXISTS LoginLogs (
+                        Id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                        CreatedUtc  TEXT NOT NULL,
+                        Payload     TEXT NOT NULL
+                    );");
+
+                Exec(conn, @"
+                    CREATE TABLE IF NOT EXISTS StudioActionLogs (
+                        Id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                        CreatedUtc  TEXT NOT NULL,
+                        Payload     TEXT NOT NULL
+                    );");
+
                 tx.Commit();
             }
 

@@ -36,8 +36,9 @@ namespace PhotoStudioApp.Services
         /// deleted - never deleted opportunistically while still being enumerated - so the
         /// returned count is always an accurate tally of what was purged, never a guess made
         /// after the fact. Returns the number of files deleted (0 if the folder doesn't exist or
-        /// nothing matches).</summary>
-        public int DeleteFilesWithPrefixes(string absoluteFolderPath, params string[] prefixes)
+        /// nothing matches). Each deletion is recorded in the studio action log (categoryName is
+        /// only used for that log entry - pass null if the caller doesn't have one).</summary>
+        public int DeleteFilesWithPrefixes(string absoluteFolderPath, string categoryName, params string[] prefixes)
         {
             if (!Directory.Exists(absoluteFolderPath) || prefixes == null || prefixes.Length == 0)
                 return 0;
@@ -55,14 +56,20 @@ namespace PhotoStudioApp.Services
 
             // 2) Only now delete what was calculated above.
             foreach (var file in matchingFiles)
+            {
                 File.Delete(file);
+                LogStudioAction(Path.GetFileName(file), "Suppression (purge)", categoryName,
+                    "Préfixe rejeté, retiré avant clôture");
+            }
 
             return matchingFiles.Count;
         }
 
         /// <summary>Moves every photo file from source into destination (creating destination if
-        /// needed). Non-photo files are left behind. Returns the number of files moved.</summary>
-        public int MovePhotos(string sourceFolder, string destFolder)
+        /// needed). Non-photo files are left behind. Returns the number of files moved. Each
+        /// move is recorded in the studio action log (categoryName is only used for that log
+        /// entry - pass null if the caller doesn't have one).</summary>
+        public int MovePhotos(string sourceFolder, string destFolder, string categoryName = null)
         {
             if (!Directory.Exists(sourceFolder))
                 return 0;
@@ -81,6 +88,8 @@ namespace PhotoStudioApp.Services
                 destPath = ResolveNameCollision(destPath);
                 File.Move(file, destPath);
                 moved++;
+                LogStudioAction(fileName, "Déplacement (archivage)", categoryName,
+                    $"Vers le dossier du jour ({Path.GetFileName(destFolder)})");
             }
             return moved;
         }
@@ -106,7 +115,10 @@ namespace PhotoStudioApp.Services
 
         /// <summary>Moves a whole directory (e.g. the day's "today" folder) into an archive
         /// location. Throws IOException if the destination already exists, so the caller can
-        /// show a clear "already exists" error instead of silently merging/overwriting.</summary>
+        /// show a clear "already exists" error instead of silently merging/overwriting. Records
+        /// one summary entry in the studio action log for the whole folder (not per-file - the
+        /// individual photos inside were already logged by MovePhotos on their way into this
+        /// folder).</summary>
         public void MoveDirectory(string sourceDir, string destDir)
         {
             if (Directory.Exists(destDir))
@@ -117,6 +129,21 @@ namespace PhotoStudioApp.Services
                 Directory.CreateDirectory(parent);
 
             Directory.Move(sourceDir, destDir);
+            LogStudioAction(Path.GetFileName(sourceDir), "Archivage du dossier", null, $"Déplacé vers {destDir}");
+        }
+
+        /// <summary>Records one studio action log entry. Never throws - a logging failure must
+        /// never interrupt a real file operation (purge/move/archive) already in progress.</summary>
+        private static void LogStudioAction(string fileName, string action, string categoryName, string details)
+        {
+            try
+            {
+                StudioActionLogService.Record(fileName, action, categoryName, details);
+            }
+            catch
+            {
+                // Best-effort only - see summary above.
+            }
         }
 
         public bool IsPathReachable(string path)

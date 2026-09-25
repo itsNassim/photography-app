@@ -392,7 +392,7 @@ namespace PhotoStudioApp.UI
         /// created for the new date instead of renaming.</summary>
         private void ChangeDateBtn_Click(object sender, EventArgs e)
         {
-            if (!AuthGate.RequireAdminPassword(this)) return;
+            if (!AuthGate.RequireAdminPassword(this, "Changer la date de travail", "Changer la date")) return;
 
             var settings = _repo.LoadAll();
             if (!DateTime.TryParseExact(settings.CurrentWorkDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out DateTime oldDate))
@@ -462,12 +462,17 @@ namespace PhotoStudioApp.UI
             {
                 if (dlg.ShowDialog() == DialogResult.OK)
                 {
-                    if (!string.IsNullOrEmpty(current.PasswordHash) &&
+                    bool hadExistingPassword = !string.IsNullOrEmpty(current.PasswordHash);
+                    if (hadExistingPassword &&
                         !PasswordService.Verify(dlg.CurrentPassword, current.PasswordHash, current.PasswordSalt))
                     {
+                        LoginLogService.Record("Changer le mot de passe administrateur", "Definir / Changer", 1, false, "Mot de passe actuel incorrect");
                         MessageBox.Show("Le mot de passe actuel est incorrect.", "Non modifie", MessageBoxButtons.OK, MessageBoxIcon.Error);
                         return;
                     }
+
+                    if (hadExistingPassword)
+                        LoginLogService.Record("Changer le mot de passe administrateur", "Definir / Changer", 0, true);
 
                     PasswordService.Hash(dlg.NewPassword, out string hash, out string salt);
                     current.PasswordHash = hash;
