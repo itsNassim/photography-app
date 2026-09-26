@@ -184,7 +184,9 @@ namespace PhotoStudioApp.Data
         }
 
         /// <summary>Aggregates every closed day by calendar month (year+month of CloseDate),
-        /// most recent month first - powers the "Résumé mensuel" sub-tab.</summary>
+        /// most recent month first - powers the "Résumé mensuel" sub-tab. Manual month-level
+        /// expenses (see MonthlyExpenseRepository) are folded into TotalExpenses/NetRevenue here
+        /// too, alongside the per-day expenses already counted in each DailyClose.</summary>
         public List<MonthSummary> GetMonthlySummaries()
         {
             var list = new List<MonthSummary>();
@@ -216,6 +218,40 @@ namespace PhotoStudioApp.Data
                     });
                 }
             }
+
+            // A month can also have manual expenses (rent, etc.) with zero closed days at all
+            // (e.g. rent entered for the current month before any day has been closed yet) - add
+            // a summary row for those months too, so the expense isn't silently invisible.
+            var manualTotals = new MonthlyExpenseRepository().GetTotalsByMonth();
+            foreach (var kvp in manualTotals)
+            {
+                var existing = list.Find(m => m.YearMonth == kvp.Key);
+                if (existing != null)
+                {
+                    existing.TotalExpenses += kvp.Value;
+                    existing.NetRevenue -= kvp.Value;
+                }
+                else
+                {
+                    DateTime firstOfMonth;
+                    string label = kvp.Key;
+                    if (DateTime.TryParseExact(kvp.Key + "-01", "yyyy-MM-dd", null,
+                        System.Globalization.DateTimeStyles.None, out firstOfMonth))
+                        label = firstOfMonth.ToString("MMMM yyyy", AppCulture.French);
+
+                    list.Add(new MonthSummary
+                    {
+                        YearMonth = kvp.Key,
+                        MonthLabel = label,
+                        DaysClosed = 0,
+                        TotalRevenue = 0,
+                        TotalExpenses = kvp.Value,
+                        NetRevenue = -kvp.Value
+                    });
+                }
+            }
+
+            list.Sort((a, b) => string.CompareOrdinal(b.YearMonth, a.YearMonth));
             return list;
         }
 
@@ -269,6 +305,49 @@ namespace PhotoStudioApp.Data
             }
         }
 
+        /// <summary>Deletes every closed day's DB record whose CloseDate falls within the given
+        /// "yyyy-MM" month (and their line items/custom charges/expenses), plus any manual
+        /// monthly expenses for that month - the "Supprimer ce mois" action in "Résumé mensuel".
+        /// Does NOT touch the filesystem - see Services/ArchiveCleanupService for deleting the
+        /// actual archived folders.</summary>
+        public void DeleteMonth(string yearMonth)
+        {
+            using (var conn = Db.OpenConnection())
+            using (var tx = conn.BeginTransaction())
+            {
+                using (var cmd = new SQLiteCommand(@"
+                    DELETE FROM DailyCloseLineItems WHERE DailyCloseId IN
+                        (SELECT Id FROM DailyCloses WHERE substr(CloseDate, 1, 7) = @ym);", conn, tx))
+                {
+                    cmd.Parameters.AddWithValue("@ym", yearMonth);
+                    cmd.ExecuteNonQuery();
+                }
+                using (var cmd = new SQLiteCommand(@"
+                    DELETE FROM DailyCloseCustomCharges WHERE DailyCloseId IN
+                        (SELECT Id FROM DailyCloses WHERE substr(CloseDate, 1, 7) = @ym);", conn, tx))
+                {
+                    cmd.Parameters.AddWithValue("@ym", yearMonth);
+                    cmd.ExecuteNonQuery();
+                }
+                using (var cmd = new SQLiteCommand(@"
+                    DELETE FROM DailyCloseExpenses WHERE DailyCloseId IN
+                        (SELECT Id FROM DailyCloses WHERE substr(CloseDate, 1, 7) = @ym);", conn, tx))
+                {
+                    cmd.Parameters.AddWithValue("@ym", yearMonth);
+                    cmd.ExecuteNonQuery();
+                }
+                using (var cmd = new SQLiteCommand(
+                    "DELETE FROM DailyCloses WHERE substr(CloseDate, 1, 7) = @ym;", conn, tx))
+                {
+                    cmd.Parameters.AddWithValue("@ym", yearMonth);
+                    cmd.ExecuteNonQuery();
+                }
+                tx.Commit();
+            }
+
+            new MonthlyExpenseRepository().DeleteForMonth(yearMonth);
+        }
+
         /// <summary>Wipes every closed-day record from the database (all history, all line
         /// items, all custom-charge and expense snapshots). Does NOT touch the filesystem - see
         /// Services/ArchiveCleanupService for deleting the actual archived folders.</summary>
@@ -287,6 +366,10 @@ namespace PhotoStudioApp.Data
                     cmd.ExecuteNonQuery();
                 tx.Commit();
             }
+
+            using (var conn = Db.OpenConnection())
+            using (var cmd = new SQLiteCommand("DELETE FROM MonthlyExpenses;", conn))
+                cmd.ExecuteNonQuery();
         }
 
         private void Exec(SQLiteConnection conn, SQLiteTransaction tx, string sql, int id)

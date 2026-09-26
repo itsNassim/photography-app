@@ -88,6 +88,13 @@
     <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
+    <!-- Microsoft.VisualBasic.FileIO.FileSystem is used purely for its
+         DeleteFile/DeleteDirectory(..., RecycleOption.SendToRecycleBin) overloads - the standard
+         .NET Framework way to send something to the Recycle Bin instead of deleting it
+         permanently. Despite the assembly name, this is ordinary C#-callable framework code
+         (not VB-specific), and it's part of the same reference-assemblies package as everything
+         else above, so no extra download/HintPath is needed. -->
+    <Reference Include="Microsoft.VisualBasic" />
     <Reference Include="System.Xml" />
     <Reference Include="System.Xml.Linq" />
     <!-- Restored directly (not via "nuget restore") from Stub.System.Data.SQLite.Core.NetFramework -
@@ -109,6 +116,7 @@
     <Compile Include="Models\AppSettings.cs" />
     <Compile Include="Models\LoginLogEntry.cs" />
     <Compile Include="Models\StudioActionLogEntry.cs" />
+    <Compile Include="Models\MonthlyExpense.cs" />
     <Compile Include="Data\Db.cs" />
     <Compile Include="Data\SchemaInitializer.cs" />
     <Compile Include="Data\CategoryRepository.cs" />
@@ -120,6 +128,7 @@
     <Compile Include="Data\SettingsRepository.cs" />
     <Compile Include="Data\LoginLogRepository.cs" />
     <Compile Include="Data\StudioActionLogRepository.cs" />
+    <Compile Include="Data\MonthlyExpenseRepository.cs" />
     <Compile Include="Services\PasswordService.cs" />
     <Compile Include="Services\FolderCountService.cs" />
     <Compile Include="Services\ClosingService.cs" />
@@ -143,11 +152,13 @@
     <Compile Include="UI\HistoryTab.cs" />
     <Compile Include="UI\LoginLogsTab.cs" />
     <Compile Include="UI\StudioLogsTab.cs" />
+    <Compile Include="UI\ArchiveSettingsTab.cs" />
     <Compile Include="UI\SettingsTab.cs" />
     <Compile Include="UI\Dialogs\AddEditCategoryDialog.cs" />
     <Compile Include="UI\Dialogs\AddEditStockDialog.cs" />
     <Compile Include="UI\Dialogs\AddCustomChargeDialog.cs" />
     <Compile Include="UI\Dialogs\AddExpenseDialog.cs" />
+    <Compile Include="UI\Dialogs\AddEditMonthlyExpenseDialog.cs" />
     <Compile Include="UI\Dialogs\PasswordPromptDialog.cs" />
     <Compile Include="UI\Dialogs\SetPasswordDialog.cs" />
     <Compile Include="UI\Dialogs\TypeToConfirmDialog.cs" />

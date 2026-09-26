@@ -87,17 +87,10 @@ namespace PhotoStudioApp.UI
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 170));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-            // --- En-tete : date + bouton actualiser ---
+            // --- En-tete : date (temps reel - pas de bouton actualiser, voir RefreshAll) ---
             var headerPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.LeftToRight };
             _dateLabel = new Label { Font = Theme.FontHeading, ForeColor = Theme.TextDark, AutoSize = true, Margin = new Padding(0, 0, 20, 10) };
-            var refreshBtn = Theme.MakeSecondaryButton("Actualiser");
-            refreshBtn.Image = IconGlyphs.Refresh(16);
-            refreshBtn.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            refreshBtn.TextImageRelation = TextImageRelation.ImageBeforeText;
-            refreshBtn.Width = 130;
-            refreshBtn.Click += (s, e) => RefreshAll();
             headerPanel.Controls.Add(_dateLabel);
-            headerPanel.Controls.Add(refreshBtn);
             root.Controls.Add(headerPanel, 0, 0);
 
             // --- Tableau des categories ---
@@ -157,16 +150,9 @@ namespace PhotoStudioApp.UI
             var deleteBalanceBtn = Theme.MakeDangerButton("Supprimer");
             deleteBalanceBtn.Width = 110;
             deleteBalanceBtn.Click += DeleteBalanceBtn_Click;
-            var refreshPendingBtn = Theme.MakeSecondaryButton("Actualiser");
-            refreshPendingBtn.Image = IconGlyphs.Refresh(16);
-            refreshPendingBtn.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            refreshPendingBtn.TextImageRelation = TextImageRelation.ImageBeforeText;
-            refreshPendingBtn.Width = 130;
-            refreshPendingBtn.Click += (s, e) => RefreshPendingBalances();
             pendingHeader.Controls.Add(pendingTitle);
             pendingHeader.Controls.Add(payBalanceBtn);
             pendingHeader.Controls.Add(deleteBalanceBtn);
-            pendingHeader.Controls.Add(refreshPendingBtn);
 
             var pendingPanel = new Panel { Dock = DockStyle.Fill, BackColor = Theme.CardBackground };
             _pendingGrid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true };
@@ -449,7 +435,10 @@ namespace PhotoStudioApp.UI
                     var watcher = new FileSystemWatcher(abs)
                     {
                         NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.DirectoryName,
-                        IncludeSubdirectories = false
+                        // Recursive - a category folder's own subfolders (a photographer
+                        // organizing shots into a client-name subfolder, for instance) need to be
+                        // watched and logged too, not just the category folder's own top level.
+                        IncludeSubdirectories = true
                     };
                     watcher.Created += FolderWatcher_Changed;
                     watcher.Deleted += FolderWatcher_Changed;
@@ -489,14 +478,16 @@ namespace PhotoStudioApp.UI
             catch (InvalidOperationException) { /* handle not yet created - ignore */ }
         }
 
-        /// <summary>Records a file entering/leaving/being renamed in a category folder into the
-        /// studio action log (Archive tab). "Changed" (a plain write, e.g. mid-copy) is not
-        /// logged - too noisy and not a meaningful action on its own; only the file's arrival,
-        /// removal, or rename is. Skipped entirely while StudioLogSuppressor is active, i.e.
-        /// during the app's own routine close-day purge/archive - those are logged explicitly
-        /// and more informatively by FolderCountService instead (see its comments), so logging
-        /// them again here would both duplicate and mislabel them (a photo safely moved to the
-        /// archive would otherwise show up here as a plain "Suppression").</summary>
+        /// <summary>Records a file (or subfolder) entering/leaving/being renamed anywhere inside
+        /// a category folder - including inside subfolders someone creates within it, now that
+        /// watchers are recursive (see SetupFolderWatchers) - into the studio action log (Archive
+        /// tab). "Changed" (a plain write, e.g. mid-copy) is not logged - too noisy and not a
+        /// meaningful action on its own; only a file/folder's arrival, removal, or rename is.
+        /// Skipped entirely while StudioLogSuppressor is active, i.e. during the app's own
+        /// routine close-day purge/archive - those are logged explicitly and more informatively
+        /// by FolderCountService instead (see its comments), so logging them again here would
+        /// both duplicate and mislabel them (a photo safely moved to the archive would otherwise
+        /// show up here as a plain "Suppression").</summary>
         private void LogStudioFileEvent(object sender, FileSystemEventArgs e)
         {
             try
@@ -508,21 +499,44 @@ namespace PhotoStudioApp.UI
                 string categoryName = (watcher != null && _watcherCategoryNames.TryGetValue(watcher, out var name)) ? name : null;
                 string fileName = Path.GetFileName(e.FullPath);
 
+                // With recursive watching, an event can come from several levels deep inside the
+                // category folder - the sub-folder path (relative to the category root) is worth
+                // recording so a log entry for "photo.jpg" says which client/sub-folder it was in.
+                string subPath = null;
+                if (watcher != null)
+                {
+                    string relativeDir = Path.GetDirectoryName(GetRelativePath(watcher.Path, e.FullPath));
+                    if (!string.IsNullOrEmpty(relativeDir))
+                        subPath = relativeDir;
+                }
+
+                // Created/Deleted don't tell us on their own whether the entry was a file or a
+                // sub-folder. For Created the entry still exists, so Directory.Exists settles it
+                // directly. For Deleted it no longer exists to check - a missing extension is
+                // used as a best-effort hint (a real photo file always has one; a folder someone
+                // named "IMG_2026" without a dot would be the rare miss here).
+                bool isDirectory = e.ChangeType == WatcherChangeTypes.Created
+                    ? Directory.Exists(e.FullPath)
+                    : string.IsNullOrEmpty(Path.GetExtension(e.FullPath));
+
                 string action;
-                string details = null;
+                string details = subPath == null ? null : $"Dans le sous-dossier : {subPath}";
                 switch (e.ChangeType)
                 {
                     case WatcherChangeTypes.Created:
-                        action = "Entrée (nouveau fichier)";
+                        action = isDirectory ? "Création de sous-dossier" : "Entrée (nouveau fichier)";
                         break;
                     case WatcherChangeTypes.Deleted:
-                        action = "Suppression";
+                        action = isDirectory ? "Suppression de sous-dossier" : "Suppression";
                         break;
                     case WatcherChangeTypes.Renamed:
-                        action = "Renommage";
+                        action = isDirectory ? "Renommage de sous-dossier" : "Renommage";
                         var renamed = e as RenamedEventArgs;
                         if (renamed != null)
-                            details = $"Ancien nom : {Path.GetFileName(renamed.OldFullPath)}";
+                        {
+                            string oldName = Path.GetFileName(renamed.OldFullPath);
+                            details = details == null ? $"Ancien nom : {oldName}" : $"{details} - Ancien nom : {oldName}";
+                        }
                         break;
                     default:
                         return;
@@ -533,6 +547,27 @@ namespace PhotoStudioApp.UI
             catch
             {
                 // Logging must never break the live folder-watching feature.
+            }
+        }
+
+        /// <summary>.NET Framework 4.6 has no built-in Path.GetRelativePath (that's a .NET Core /
+        /// 4.8+ API) - this is the minimal equivalent needed above: "C:\Studio\Portrait\ClientX\a.jpg"
+        /// relative to "C:\Studio\Portrait" becomes "ClientX\a.jpg". Falls back to just the file
+        /// name if fullPath isn't actually under basePath for some reason.</summary>
+        private static string GetRelativePath(string basePath, string fullPath)
+        {
+            try
+            {
+                string baseFull = Path.GetFullPath(basePath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                    + Path.DirectorySeparatorChar;
+                string target = Path.GetFullPath(fullPath);
+                if (target.StartsWith(baseFull, StringComparison.OrdinalIgnoreCase))
+                    return target.Substring(baseFull.Length);
+                return Path.GetFileName(fullPath);
+            }
+            catch
+            {
+                return Path.GetFileName(fullPath);
             }
         }
 

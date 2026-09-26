@@ -10,13 +10,19 @@ namespace PhotoStudioApp.UI
     public class HistoryTab : UserControl
     {
         private readonly DailyCloseRepository _repo = new DailyCloseRepository();
+        private readonly MonthlyExpenseRepository _monthlyExpenseRepo = new MonthlyExpenseRepository();
         private readonly ArchiveCleanupService _cleanupService = new ArchiveCleanupService();
         private readonly SettingsRepository _settingsRepo = new SettingsRepository();
         private DataGridView _grid;
         private DataGridView _monthGrid;
+        private DataGridView _monthExpenseGrid;
+        private Button _addMonthExpenseBtn;
+        private Button _editMonthExpenseBtn;
+        private Button _deleteMonthExpenseBtn;
+        private Button _deleteMonthBtn;
         private LoginLogsTab _loginLogsTab;
         private StudioLogsTab _studioLogsTab;
-        private CheckBox _workerArchiveFeatureCheck;
+        private ArchiveSettingsTab _archiveSettingsTab;
         private Panel _lockedPanel;
         private Panel _contentPanel;
         private bool _unlocked;
@@ -73,20 +79,22 @@ namespace PhotoStudioApp.UI
             var monthPage = new TabPage("Résumé mensuel") { BackColor = Theme.Background };
             var loginLogsPage = new TabPage("Journal de connexion") { BackColor = Theme.Background };
             var studioLogsPage = new TabPage("Journal des actions studio") { BackColor = Theme.Background };
+            var settingsPage = new TabPage("Paramètres") { BackColor = Theme.Background };
             innerTabs.TabPages.Add(daysPage);
             innerTabs.TabPages.Add(monthPage);
             innerTabs.TabPages.Add(loginLogsPage);
             innerTabs.TabPages.Add(studioLogsPage);
+            innerTabs.TabPages.Add(settingsPage);
             innerTabs.SelectedIndexChanged += (s, e) =>
             {
                 if (innerTabs.SelectedTab == monthPage) LoadMonthSummaries();
                 else if (innerTabs.SelectedTab == loginLogsPage) _loginLogsTab.LoadData();
                 else if (innerTabs.SelectedTab == studioLogsPage) _studioLogsTab.LoadData();
+                else if (innerTabs.SelectedTab == settingsPage) _archiveSettingsTab.LoadData();
             };
 
-            // --- Sub-tab: Journées (list of closed days) ---
-            var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, ColumnCount = 1, Padding = new Padding(16) };
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            // --- Sub-tab: Journées (list of closed days) - temps reel, pas de bouton actualiser ---
+            var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, ColumnCount = 1, Padding = new Padding(16) };
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -98,12 +106,6 @@ namespace PhotoStudioApp.UI
             var viewBtn = Theme.MakeSecondaryButton("Voir / Reimprimer");
             viewBtn.Width = 160;
             viewBtn.Click += ViewBtn_Click;
-            var refreshBtn = Theme.MakeSecondaryButton("Actualiser");
-            refreshBtn.Image = IconGlyphs.Refresh(16);
-            refreshBtn.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            refreshBtn.TextImageRelation = TextImageRelation.ImageBeforeText;
-            refreshBtn.Width = 130;
-            refreshBtn.Click += (s, e) => LoadHistory();
             var deleteBtn = Theme.MakeDangerButton("Supprimer");
             deleteBtn.Width = 110;
             deleteBtn.Click += DeleteBtn_Click;
@@ -117,26 +119,11 @@ namespace PhotoStudioApp.UI
             clearAllBtn.Width = 140;
             clearAllBtn.Click += ClearAllBtn_Click;
             toolbar.Controls.Add(viewBtn);
-            toolbar.Controls.Add(refreshBtn);
             toolbar.Controls.Add(deleteBtn);
             toolbar.Controls.Add(cleanupBtn);
             toolbar.Controls.Add(keepCurrentMonthBtn);
             toolbar.Controls.Add(clearAllBtn);
             root.Controls.Add(toolbar, 0, 1);
-
-            // --- Master on/off for the "Archiver la journée (sans revenu)" worker feature
-            //     (the button itself lives in Paramètres - this just controls whether it's
-            //     available there at all). ---
-            var workerArchiveRow = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 8) };
-            _workerArchiveFeatureCheck = new CheckBox
-            {
-                Text = "Autoriser l'archivage journalier sans revenu pour les employés (bouton dans Paramètres)",
-                AutoSize = true,
-                Margin = new Padding(0, 6, 0, 0)
-            };
-            _workerArchiveFeatureCheck.Click += WorkerArchiveFeatureCheck_Click;
-            workerArchiveRow.Controls.Add(_workerArchiveFeatureCheck);
-            root.Controls.Add(workerArchiveRow, 0, 2);
 
             var gridPanel = new Panel { Dock = DockStyle.Fill, BackColor = Theme.CardBackground };
             _grid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true };
@@ -149,15 +136,17 @@ namespace PhotoStudioApp.UI
             _grid.Columns.Add("Archive", "Dossier d'archive");
             _grid.CellDoubleClick += (s, e) => OpenSelected();
             gridPanel.Controls.Add(_grid);
-            root.Controls.Add(gridPanel, 0, 3);
+            root.Controls.Add(gridPanel, 0, 2);
 
             daysPage.Controls.Add(root);
 
-            // --- Sub-tab: Résumé mensuel (month summary) ---
-            var monthRoot = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, ColumnCount = 1, Padding = new Padding(16) };
+            // --- Sub-tab: Résumé mensuel (month summary + CRUD on manual monthly expenses) ---
+            var monthRoot = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 5, ColumnCount = 1, Padding = new Padding(16) };
             monthRoot.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             monthRoot.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            monthRoot.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            monthRoot.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
+            monthRoot.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            monthRoot.RowStyles.Add(new RowStyle(SizeType.Percent, 45));
 
             var monthTitle = new Label { Text = "Résumé des revenus par mois", Font = Theme.FontHeading, AutoSize = true, Margin = new Padding(0, 0, 0, 10) };
             monthRoot.Controls.Add(monthTitle, 0, 0);
@@ -166,14 +155,11 @@ namespace PhotoStudioApp.UI
             var monthViewBtn = Theme.MakeSecondaryButton("Voir / Imprimer le mois");
             monthViewBtn.Width = 200;
             monthViewBtn.Click += MonthViewBtn_Click;
-            var monthRefreshBtn = Theme.MakeSecondaryButton("Actualiser");
-            monthRefreshBtn.Image = IconGlyphs.Refresh(16);
-            monthRefreshBtn.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            monthRefreshBtn.TextImageRelation = TextImageRelation.ImageBeforeText;
-            monthRefreshBtn.Width = 130;
-            monthRefreshBtn.Click += (s, e) => LoadMonthSummaries();
+            _deleteMonthBtn = Theme.MakeDangerButton("Supprimer ce mois");
+            _deleteMonthBtn.Width = 160;
+            _deleteMonthBtn.Click += DeleteMonthBtn_Click;
             monthToolbar.Controls.Add(monthViewBtn);
-            monthToolbar.Controls.Add(monthRefreshBtn);
+            monthToolbar.Controls.Add(_deleteMonthBtn);
             monthRoot.Controls.Add(monthToolbar, 0, 1);
 
             var monthGridPanel = new Panel { Dock = DockStyle.Fill, BackColor = Theme.CardBackground };
@@ -185,8 +171,38 @@ namespace PhotoStudioApp.UI
             _monthGrid.Columns.Add("Expenses", "Dépenses du mois");
             _monthGrid.Columns.Add("Net", "Net du mois");
             _monthGrid.CellDoubleClick += (s, e) => OpenSelectedMonth();
+            _monthGrid.SelectionChanged += (s, e) => LoadMonthExpenses();
             monthGridPanel.Controls.Add(_monthGrid);
             monthRoot.Controls.Add(monthGridPanel, 0, 2);
+
+            // --- Dépenses manuelles du mois sélectionné (CRUD) ---
+            var monthExpenseHeader = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 10, 0, 6) };
+            monthExpenseHeader.Controls.Add(new Label
+            {
+                Text = "Dépenses manuelles du mois sélectionné (loyer, abonnements, etc.) :",
+                Font = Theme.FontSubheading, AutoSize = true, Margin = new Padding(0, 8, 16, 0)
+            });
+            _addMonthExpenseBtn = Theme.MakePrimaryButton("+ Ajouter");
+            _addMonthExpenseBtn.Width = 110;
+            _addMonthExpenseBtn.Click += AddMonthExpenseBtn_Click;
+            _editMonthExpenseBtn = Theme.MakeSecondaryButton("Modifier");
+            _editMonthExpenseBtn.Width = 100;
+            _editMonthExpenseBtn.Click += EditMonthExpenseBtn_Click;
+            _deleteMonthExpenseBtn = Theme.MakeDangerButton("Supprimer");
+            _deleteMonthExpenseBtn.Width = 100;
+            _deleteMonthExpenseBtn.Click += DeleteMonthExpenseBtn_Click;
+            monthExpenseHeader.Controls.Add(_addMonthExpenseBtn);
+            monthExpenseHeader.Controls.Add(_editMonthExpenseBtn);
+            monthExpenseHeader.Controls.Add(_deleteMonthExpenseBtn);
+            monthRoot.Controls.Add(monthExpenseHeader, 0, 3);
+
+            var monthExpensePanel = new Panel { Dock = DockStyle.Fill, BackColor = Theme.CardBackground };
+            _monthExpenseGrid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true };
+            Theme.StyleGrid(_monthExpenseGrid);
+            _monthExpenseGrid.Columns.Add("Description", "Description");
+            _monthExpenseGrid.Columns.Add("Amount", "Montant");
+            monthExpensePanel.Controls.Add(_monthExpenseGrid);
+            monthRoot.Controls.Add(monthExpensePanel, 0, 4);
 
             monthPage.Controls.Add(monthRoot);
 
@@ -197,6 +213,11 @@ namespace PhotoStudioApp.UI
             // --- Sub-tab: Journal des actions studio (studio file action logs) ---
             _studioLogsTab = new StudioLogsTab { Dock = DockStyle.Fill };
             studioLogsPage.Controls.Add(_studioLogsTab);
+
+            // --- Sub-tab: Paramètres (admin settings that require the password - see
+            //     ArchiveSettingsTab for exactly what lives here vs the main Paramètres tab) ---
+            _archiveSettingsTab = new ArchiveSettingsTab { Dock = DockStyle.Fill };
+            settingsPage.Controls.Add(_archiveSettingsTab);
 
             _contentPanel.Controls.Add(innerTabs);
 
@@ -259,28 +280,7 @@ namespace PhotoStudioApp.UI
             LoadMonthSummaries();
             _loginLogsTab.LoadData();
             _studioLogsTab.LoadData();
-
-            var settings = _settingsRepo.LoadAll();
-            _workerArchiveFeatureCheck.Checked = settings.WorkerArchiveFeatureEnabled;
-        }
-
-        /// <summary>Master on/off for the whole "Archiver la journée (sans revenu)" worker
-        /// feature - password-protected in both directions since it controls whether a
-        /// no-password-needed close-day button becomes available at all in Paramètres.</summary>
-        private void WorkerArchiveFeatureCheck_Click(object sender, EventArgs e)
-        {
-            bool wantsEnabled = _workerArchiveFeatureCheck.Checked;
-            if (!AuthGate.RequireAdminPassword(this, "Activer / désactiver l'archivage sans mot de passe", "Case a cocher - archivage employé"))
-            {
-                _workerArchiveFeatureCheck.Checked = !wantsEnabled;
-                return;
-            }
-
-            var settings = _settingsRepo.LoadAll();
-            settings.WorkerArchiveFeatureEnabled = wantsEnabled;
-            if (!wantsEnabled)
-                settings.WorkerArchiveArmed = false; // never leave it armed once the feature itself is off
-            _settingsRepo.SaveAll(settings);
+            _archiveSettingsTab.LoadData();
         }
 
         private void LoadMonthSummaries()
@@ -293,6 +293,29 @@ namespace PhotoStudioApp.UI
                 int idx = _monthGrid.Rows.Add(m.MonthLabel, m.DaysClosed, m.TotalRevenue.ToString("0.00"),
                     m.TotalExpenses.ToString("0.00"), m.NetRevenue.ToString("0.00"));
                 _monthGrid.Rows[idx].Tag = m.YearMonth;
+            }
+            LoadMonthExpenses();
+        }
+
+        /// <summary>Loads the manual monthly-expense grid for whichever month row is currently
+        /// selected in _monthGrid (empty/disabled if none is selected).</summary>
+        private void LoadMonthExpenses()
+        {
+            if (_monthExpenseGrid == null) return;
+            _monthExpenseGrid.Rows.Clear();
+
+            string yearMonth = _monthGrid.CurrentRow?.Tag as string;
+            bool hasSelection = yearMonth != null;
+            _addMonthExpenseBtn.Enabled = hasSelection;
+            _editMonthExpenseBtn.Enabled = hasSelection;
+            _deleteMonthExpenseBtn.Enabled = hasSelection;
+            _deleteMonthBtn.Enabled = hasSelection;
+            if (!hasSelection) return;
+
+            foreach (var expense in _monthlyExpenseRepo.GetForMonth(yearMonth))
+            {
+                int idx = _monthExpenseGrid.Rows.Add(expense.Description, expense.Amount.ToString("0.00"));
+                _monthExpenseGrid.Rows[idx].Tag = expense.Id;
             }
         }
 
@@ -345,6 +368,87 @@ namespace PhotoStudioApp.UI
                 form.ShowDialog();
         }
 
+        /// <summary>Deletes every closed-day record AND every manual expense for the selected
+        /// month - the "Delete" side of the Résumé mensuel CRUD. Never touches the archived
+        /// photo folders on disk, same guarantee as every other history-cleanup action here.</summary>
+        private void DeleteMonthBtn_Click(object sender, EventArgs e)
+        {
+            if (_monthGrid.CurrentRow?.Tag == null) return;
+            string yearMonth = (string)_monthGrid.CurrentRow.Tag;
+            string label = _monthGrid.CurrentRow.Cells["Month"].Value?.ToString() ?? yearMonth;
+
+            if (!AuthGate.RequireAdminPassword(this, "Supprimer un mois de l'historique", "Supprimer ce mois")) return;
+
+            if (MessageBox.Show(
+                $"Retirer TOUT le mois de {label} de l'historique (toutes les journées clôturées de ce mois " +
+                "et ses dépenses manuelles) ?\n\n" +
+                "Les dossiers archives sur le disque ne sont JAMAIS supprimes par cette action.",
+                "Confirmer la suppression du mois", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                return;
+
+            using (var confirm = new TypeToConfirmDialog(
+                $"Vous etes sur le point de supprimer TOUT le mois de {label} de l'historique.", "SUPPRIMER"))
+            {
+                if (confirm.ShowDialog(this) != DialogResult.OK)
+                    return;
+            }
+
+            _repo.DeleteMonth(yearMonth);
+            LoadHistory();
+            MessageBox.Show($"Le mois de {label} a ete retire de l'historique.", "Termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void AddMonthExpenseBtn_Click(object sender, EventArgs e)
+        {
+            string yearMonth = _monthGrid.CurrentRow?.Tag as string;
+            if (yearMonth == null) return;
+
+            using (var dlg = new AddEditMonthlyExpenseDialog())
+            {
+                if (dlg.ShowDialog(this) == DialogResult.OK)
+                {
+                    dlg.ResultExpense.YearMonth = yearMonth;
+                    _monthlyExpenseRepo.Insert(dlg.ResultExpense);
+                    LoadMonthSummaries();
+                }
+            }
+        }
+
+        private void EditMonthExpenseBtn_Click(object sender, EventArgs e)
+        {
+            string yearMonth = _monthGrid.CurrentRow?.Tag as string;
+            if (yearMonth == null || _monthExpenseGrid.CurrentRow?.Tag == null) return;
+            int id = (int)_monthExpenseGrid.CurrentRow.Tag;
+
+            var existing = _monthlyExpenseRepo.GetForMonth(yearMonth).Find(x => x.Id == id);
+            if (existing == null) return;
+
+            using (var dlg = new AddEditMonthlyExpenseDialog(existing))
+            {
+                if (dlg.ShowDialog(this) == DialogResult.OK)
+                {
+                    dlg.ResultExpense.YearMonth = yearMonth;
+                    _monthlyExpenseRepo.Update(dlg.ResultExpense);
+                    LoadMonthSummaries();
+                }
+            }
+        }
+
+        private void DeleteMonthExpenseBtn_Click(object sender, EventArgs e)
+        {
+            if (_monthExpenseGrid.CurrentRow?.Tag == null) return;
+            int id = (int)_monthExpenseGrid.CurrentRow.Tag;
+            string description = _monthExpenseGrid.CurrentRow.Cells["Description"].Value?.ToString() ?? "";
+
+            if (MessageBox.Show(
+                $"Supprimer la dépense \"{description}\" ?",
+                "Confirmer la suppression", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                return;
+
+            _monthlyExpenseRepo.Delete(id);
+            LoadMonthSummaries();
+        }
+
         private void KeepCurrentMonthBtn_Click(object sender, EventArgs e)
         {
             var candidates = _cleanupService.FindClosesOutsideCurrentMonth();
@@ -378,7 +482,7 @@ namespace PhotoStudioApp.UI
             {
                 MessageBox.Show(
                     "La duree de conservation n'est pas configuree (0 = desactive).\n" +
-                    "Definissez-la dans l'onglet Paramètres pour utiliser ce bouton.",
+                    "Definissez-la dans l'onglet Paramètres (dans Historique) pour utiliser ce bouton.",
                     "Nettoyage non configure", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }

@@ -71,18 +71,9 @@ namespace PhotoStudioApp.UI
 
             var resetBtn = Theme.MakeSecondaryButton("Réinitialiser les filtres");
             resetBtn.Width = 190;
-            resetBtn.Margin = new Padding(0, 2, 8, 4);
+            resetBtn.Margin = new Padding(0, 2, 0, 4);
             resetBtn.Click += (s, e) => ResetFilters();
             filterBar.Controls.Add(resetBtn);
-
-            var refreshBtn = Theme.MakeSecondaryButton("Actualiser");
-            refreshBtn.Image = IconGlyphs.Refresh(16);
-            refreshBtn.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            refreshBtn.TextImageRelation = TextImageRelation.ImageBeforeText;
-            refreshBtn.Width = 130;
-            refreshBtn.Margin = new Padding(0, 2, 0, 4);
-            refreshBtn.Click += (s, e) => LoadData();
-            filterBar.Controls.Add(refreshBtn);
 
             root.Controls.Add(filterBar, 0, 1);
 

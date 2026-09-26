@@ -41,6 +41,8 @@ namespace PhotoStudioApp.Data
                 ClosedWeekdaysCsv = Get("ClosedWeekdaysCsv", "Friday"),
                 CurrentWorkDate = Get("CurrentWorkDate"),
                 MaxPasswordAttempts = int.TryParse(Get("MaxPasswordAttempts", "5"), out var n) ? n : 5,
+                PasswordLockoutMinutes = int.TryParse(Get("PasswordLockoutMinutes", "5"), out var plm) ? plm : 5,
+                PasswordLockoutUntilUtc = Get("PasswordLockoutUntilUtc", ""),
                 PurgedFilePrefixesCsv = Get("PurgedFilePrefixesCsv", "re,GSW"),
                 ArchiveRetentionDays = int.TryParse(Get("ArchiveRetentionDays", "0"), out var ard) ? ard : 0,
                 WorkerArchiveFeatureEnabled = Get("WorkerArchiveFeatureEnabled", "0") == "1",
@@ -60,6 +62,8 @@ namespace PhotoStudioApp.Data
             Set("ClosedWeekdaysCsv", s.ClosedWeekdaysCsv);
             Set("CurrentWorkDate", s.CurrentWorkDate);
             Set("MaxPasswordAttempts", s.MaxPasswordAttempts.ToString());
+            Set("PasswordLockoutMinutes", s.PasswordLockoutMinutes.ToString());
+            Set("PasswordLockoutUntilUtc", s.PasswordLockoutUntilUtc ?? "");
             Set("PurgedFilePrefixesCsv", s.PurgedFilePrefixesCsv);
             Set("ArchiveRetentionDays", s.ArchiveRetentionDays.ToString());
             Set("WorkerArchiveFeatureEnabled", s.WorkerArchiveFeatureEnabled ? "1" : "0");

@@ -70,6 +70,14 @@ namespace PhotoStudioApp.UI.Dialogs
             var settings = _settingsRepo.LoadAll();
             if (PasswordService.Verify(_pwdBox.Text, settings.PasswordHash, settings.PasswordSalt))
             {
+                // Clear any stale lockout the moment the correct password is entered - it's
+                // usually already expired by then anyway (AuthGate wouldn't have opened this
+                // dialog otherwise), this just keeps the stored setting tidy.
+                if (!string.IsNullOrEmpty(settings.PasswordLockoutUntilUtc))
+                {
+                    settings.PasswordLockoutUntilUtc = "";
+                    _settingsRepo.SaveAll(settings);
+                }
                 DialogResult = DialogResult.OK;
                 Close();
                 return;
@@ -79,7 +87,14 @@ namespace PhotoStudioApp.UI.Dialogs
             int remaining = _maxAttempts - _attempts;
             if (remaining <= 0)
             {
-                MessageBox.Show("Trop de tentatives incorrectes. Action annulee.",
+                // Blocks every AuthGate call app-wide for the configured duration, persisted so
+                // restarting the app can't be used to reset the countdown - see AuthGate's own
+                // check of this same setting before it will even show this dialog again.
+                int lockoutMinutes = Math.Max(1, settings.PasswordLockoutMinutes);
+                settings.PasswordLockoutUntilUtc = DateTime.UtcNow.AddMinutes(lockoutMinutes).ToString("o");
+                _settingsRepo.SaveAll(settings);
+
+                MessageBox.Show($"Trop de tentatives incorrectes. Accès bloqué pendant {lockoutMinutes} minute(s).",
                     "Acces bloque", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 DialogResult = DialogResult.Cancel;
                 Close();

@@ -21,6 +21,16 @@ namespace PhotoStudioApp.Models
         /// <summary>Current logical work date ("today"), yyyy-MM-dd. Advances only on Close Day.</summary>
         public string CurrentWorkDate { get; set; }
         public int MaxPasswordAttempts { get; set; } = 5;
+        /// <summary>Minutes the admin-password prompt refuses to even open once
+        /// MaxPasswordAttempts is reached, app-wide (shared across every AuthGate call site) -
+        /// see PasswordLockoutUntilUtc for the actual active-lockout timestamp.</summary>
+        public int PasswordLockoutMinutes { get; set; } = 5;
+        /// <summary>UTC timestamp ("o" round-trip format) until which the admin password prompt
+        /// is blocked, set by PasswordPromptDialog the moment MaxPasswordAttempts is reached and
+        /// checked by AuthGate before it will even show the dialog. Empty/blank means no active
+        /// lockout. Persisted (not just in-memory) so restarting the app can't be used to reset
+        /// the countdown.</summary>
+        public string PasswordLockoutUntilUtc { get; set; } = "";
         /// <summary>Comma-separated filename prefixes purged from each category folder before
         /// counting/moving anything at close time (case-insensitive), e.g. "re,GSW".</summary>
         public string PurgedFilePrefixesCsv { get; set; } = "re,GSW";

@@ -54,12 +54,14 @@ namespace PhotoStudioApp.Services
                 })
                 .ToList();
 
-            // 2) Only now delete what was calculated above.
+            // 2) Only now delete what was calculated above - sent to the Recycle Bin rather
+            //    than deleted permanently, so a wrongly-configured prefix doesn't cause
+            //    unrecoverable data loss.
             foreach (var file in matchingFiles)
             {
-                File.Delete(file);
+                RecycleFile(file);
                 LogStudioAction(Path.GetFileName(file), "Suppression (purge)", categoryName,
-                    "Préfixe rejeté, retiré avant clôture");
+                    "Préfixe rejeté, retiré avant clôture - envoyé a la corbeille");
             }
 
             return matchingFiles.Count;
@@ -113,13 +115,16 @@ namespace PhotoStudioApp.Services
             return candidate;
         }
 
-        /// <summary>Moves a whole directory (e.g. the day's "today" folder) into an archive
-        /// location. Throws IOException if the destination already exists, so the caller can
-        /// show a clear "already exists" error instead of silently merging/overwriting. Records
-        /// one summary entry in the studio action log for the whole folder (not per-file - the
-        /// individual photos inside were already logged by MovePhotos on their way into this
-        /// folder).</summary>
-        public void MoveDirectory(string sourceDir, string destDir)
+        /// <summary>Archives a whole directory (e.g. the day's "today" folder) into an archive
+        /// location: the contents are COPIED to destDir first, and only once that copy has fully
+        /// succeeded is the original sent to the Recycle Bin (never deleted permanently) - so a
+        /// failure or interruption partway through never leaves the day's photos existing only in
+        /// one, partially-written place. Throws IOException if the destination already exists, so
+        /// the caller can show a clear "already exists" error instead of silently merging/
+        /// overwriting. Records one summary entry in the studio action log for the whole folder
+        /// (not per-file - the individual photos inside were already logged by MovePhotos on
+        /// their way into this folder).</summary>
+        public void ArchiveDirectory(string sourceDir, string destDir)
         {
             if (Directory.Exists(destDir))
                 throw new IOException($"Un dossier existe déjà a cet emplacement :\n{destDir}");
@@ -128,8 +133,47 @@ namespace PhotoStudioApp.Services
             if (!string.IsNullOrEmpty(parent))
                 Directory.CreateDirectory(parent);
 
-            Directory.Move(sourceDir, destDir);
-            LogStudioAction(Path.GetFileName(sourceDir), "Archivage du dossier", null, $"Déplacé vers {destDir}");
+            CopyDirectoryRecursive(sourceDir, destDir);
+            RecycleDirectory(sourceDir);
+
+            LogStudioAction(Path.GetFileName(sourceDir), "Archivage du dossier", null,
+                $"Copié vers {destDir}, puis original envoyé a la corbeille");
+        }
+
+        /// <summary>Recursively copies every file and sub-folder from sourceDir into destDir
+        /// (which is created if needed). .NET Framework has no built-in recursive directory copy,
+        /// so this is the manual equivalent of "xcopy /E".</summary>
+        private static void CopyDirectoryRecursive(string sourceDir, string destDir)
+        {
+            Directory.CreateDirectory(destDir);
+
+            foreach (var file in Directory.EnumerateFiles(sourceDir))
+                File.Copy(file, Path.Combine(destDir, Path.GetFileName(file)), overwrite: false);
+
+            foreach (var subDir in Directory.EnumerateDirectories(sourceDir))
+                CopyDirectoryRecursive(subDir, Path.Combine(destDir, Path.GetFileName(subDir)));
+        }
+
+        /// <summary>Sends a single file to the Recycle Bin instead of deleting it permanently -
+        /// the standard .NET Framework way to do this (Microsoft.VisualBasic.FileIO.FileSystem),
+        /// despite the assembly name it's ordinary framework code, not VB-specific.</summary>
+        private static void RecycleFile(string path)
+        {
+            Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(
+                path,
+                Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs,
+                Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
+        }
+
+        /// <summary>Sends a whole directory (and everything inside it) to the Recycle Bin instead
+        /// of deleting it permanently. Only ever called AFTER its contents have already been
+        /// copied somewhere safe (see ArchiveDirectory) - this is cleanup, not the only copy.</summary>
+        private static void RecycleDirectory(string path)
+        {
+            Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory(
+                path,
+                Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs,
+                Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
         }
 
         /// <summary>Records one studio action log entry. Never throws - a logging failure must

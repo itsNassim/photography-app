@@ -157,7 +157,7 @@ namespace PhotoStudioApp.Services
             try
             {
                 using (StudioLogSuppressor.Suppress())
-                    _folders.MoveDirectory(workingFolderAbs, archiveDest);
+                    _folders.ArchiveDirectory(workingFolderAbs, archiveDest);
             }
             catch (IOException ex)
             {

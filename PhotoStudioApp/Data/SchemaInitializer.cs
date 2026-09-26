@@ -140,6 +140,16 @@ namespace PhotoStudioApp.Data
                         Payload     TEXT NOT NULL
                     );");
 
+                // Manual, month-level expenses (rent, subscriptions, etc.) that aren't tied to
+                // any single closed day - CRUD'd from the "Résumé mensuel" sub-tab of Historique.
+                Exec(conn, @"
+                    CREATE TABLE IF NOT EXISTS MonthlyExpenses (
+                        Id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                        YearMonth   TEXT NOT NULL,
+                        Description TEXT NOT NULL,
+                        Amount      REAL NOT NULL
+                    );");
+
                 tx.Commit();
             }
 
@@ -330,6 +340,7 @@ namespace PhotoStudioApp.Data
             settingsRepo.Set("DateFolderFormat", "dd MMMM");
             settingsRepo.Set("ClosedWeekdaysCsv", "Friday");
             settingsRepo.Set("MaxPasswordAttempts", "5");
+            settingsRepo.Set("PasswordLockoutMinutes", "5");
             settingsRepo.Set("PurgedFilePrefixesCsv", "re,GSW");
             settingsRepo.Set("ArchiveRetentionDays", "0");
             settingsRepo.Set("CurrentWorkDate", DateTime.Today.ToString("yyyy-MM-dd"));
