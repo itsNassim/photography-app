@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
+    <ProjectGuid>{A1B2C3D4-1111-2222-3333-444455556666}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>PhotoStudioApp</RootNamespace>
+    <AssemblyName>PhotoStudioApp</AssemblyName>
+    <!-- IMPORTANT: keep at 4.6 (per project requirement). Do NOT upgrade to .NET 5+/Core —
+         those dropped Windows 7 support. -->
+    <TargetFrameworkVersion>v4.6</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <Deterministic>true</Deterministic>
+    <ApplicationIcon>Properties\app.ico</ApplicationIcon>
+    <!-- As of System.Data.SQLite.Core 1.0.116+, that package is an empty meta-package -
+         the actual managed DLL and native SQLite.Interop.dll live in
+         Stub.System.Data.SQLite.Core.NetFramework instead. This property points at it;
+         see the Reference below and the CopySQLiteInteropFiles target near the bottom
+         of this file, which copies the native DLL ourselves instead of relying on that
+         package's own build target (which has known flakiness in headless/CI builds). -->
+    <SQLiteStubPackageDir>..\packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.118\build\net46\</SQLiteStubPackageDir>
+    <ContentSQLiteInteropFiles>true</ContentSQLiteInteropFiles>
+    <!-- Deterministic fix for MSB3644 ("reference assemblies for .NETFramework,Version=v4.6
+         were not found"): windows-latest's bundled VS only ships the 4.7.2/4.8 targeting
+         packs, not the plain 4.6 one, and installing the system-wide Developer Pack in CI
+         turned out not to reliably take effect before the build step runs. Instead, this
+         points at the officially Microsoft-published Microsoft.NETFramework.ReferenceAssemblies.net46
+         NuGet package (downloaded the same direct way as the SQLite package above - see
+         .github/workflows/build.yml and build/publish.ps1), which ships the actual v4.6
+         reference assemblies as package content - no system-wide install needed at all. The
+         properties below (TargetFrameworkRootPath etc.) are set directly from it further down. -->
+    <NetFx46RefAssembliesPackageDir>$(MSBuildProjectDirectory)\..\packages\Microsoft.NETFramework.ReferenceAssemblies.net46.1.0.3\</NetFx46RefAssembliesPackageDir>
+    <!-- Set directly and UNCONDITIONALLY, rather than by importing the vendor package's own
+         .targets file (which gates on "$(TargetFrameworkIdentifier) == '.NETFramework'" -
+         that property is not guaranteed to already be resolved to that value at plain
+         top-level PropertyGroup evaluation time in a classic non-SDK .csproj like this one,
+         so that condition can silently fail to match - which is exactly what happened when
+         this was first tried as an Import: it did not fix the MSB3644 error). Setting these
+         properties unconditionally is safe here since this project only ever targets v4.6,
+         single-TFM, always.
+         IMPORTANT: NetFx46RefAssembliesPackageDir above is built from $(MSBuildProjectDirectory)
+         and is therefore an ABSOLUTE path, not a bare "..\..." relative one. This matters
+         because TargetFrameworkRootPath is consumed as a plain string by the
+         GetReferenceAssemblyPaths TASK (not via MSBuild's Import/Reference/Exists() engine
+         machinery, which resolves relative paths against the project directory automatically).
+         A raw relative path handed to a Task is instead resolved against the process's current
+         working directory - which for a solution build is the SOLUTION folder, one level above
+         the project folder - so a relative "..\packages\..." pointed one directory too far up
+         and silently resolved to a path that doesn't exist. This cost two failed CI attempts to
+         diagnose (see the diagnostic target below and areas/photostudio-app.md bug #8) - if this
+         property is ever changed again, keep it absolute. -->
+    <TargetFrameworkRootPath>$(NetFx46RefAssembliesPackageDir)build\</TargetFrameworkRootPath>
+    <EnableFrameworkPathOverride>false</EnableFrameworkPathOverride>
+    <NoStdLib>true</NoStdLib>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
+    <PlatformTarget>x86</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
+    <PlatformTarget>x86</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Explicit mscorlib reference is REQUIRED because NoStdLib=true above disables MSBuild's
+         normal implicit mscorlib reference (which would otherwise come from FrameworkPathOverride -
+         a value that isn't reliable here, hence NoStdLib in the first place). No HintPath needed:
+         standard assembly resolution searches $(TargetFrameworkDirectory), which is now correctly
+         computed from TargetFrameworkRootPath above, pointing into the downloaded NuGet package. -->
+    <Reference Include="mscorlib" />
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <!-- Microsoft.VisualBasic.FileIO.FileSystem is used purely for its
+         DeleteFile/DeleteDirectory(..., RecycleOption.SendToRecycleBin) overloads - the standard
+         .NET Framework way to send something to the Recycle Bin instead of deleting it
+         permanently. Despite the assembly name, this is ordinary C#-callable framework code
+         (not VB-specific), and it's part of the same reference-assemblies package as everything
+         else above, so no extra download/HintPath is needed. -->
+    <Reference Include="Microsoft.VisualBasic" />
+    <Reference Include="System.Xml" />
+    <Reference Include="System.Xml.Linq" />
+    <!-- Restored directly (not via "nuget restore") from Stub.System.Data.SQLite.Core.NetFramework -
+         the package that actually contains the .NET Framework assets. See SQLiteStubPackageDir above. -->
+    <Reference Include="System.Data.SQLite">
+      <HintPath>..\packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.118\lib\net46\System.Data.SQLite.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Models\Category.cs" />
+    <Compile Include="Models\StockItem.cs" />
+    <Compile Include="Models\CustomCharge.cs" />
+    <Compile Include="Models\DailyClose.cs" />
+    <Compile Include="Models\PendingBalance.cs" />
+    <Compile Include="Models\Expense.cs" />
+    <Compile Include="Models\AppSettings.cs" />
+    <Compile Include="Models\LoginLogEntry.cs" />
+    <Compile Include="Models\StudioActionLogEntry.cs" />
+    <Compile Include="Models\MonthlyExpense.cs" />
+    <Compile Include="Data\Db.cs" />
+    <Compile Include="Data\SchemaInitializer.cs" />
+    <Compile Include="Data\CategoryRepository.cs" />
+    <Compile Include="Data\StockRepository.cs" />
+    <Compile Include="Data\PendingBalanceRepository.cs" />
+    <Compile Include="Data\ExpenseRepository.cs" />
+    <Compile Include="Data\CustomChargeRepository.cs" />
+    <Compile Include="Data\DailyCloseRepository.cs" />
+    <Compile Include="Data\SettingsRepository.cs" />
+    <Compile Include="Data\LoginLogRepository.cs" />
+    <Compile Include="Data\StudioActionLogRepository.cs" />
+    <Compile Include="Data\MonthlyExpenseRepository.cs" />
+    <Compile Include="Services\PasswordService.cs" />
+    <Compile Include="Services\FolderCountService.cs" />
+    <Compile Include="Services\ClosingService.cs" />
+    <Compile Include="Services\ReportPrintService.cs" />
+    <Compile Include="Services\WorkdayCalculator.cs" />
+    <Compile Include="Services\AppCulture.cs" />
+    <Compile Include="Services\ArchiveCleanupService.cs" />
+    <Compile Include="Services\ImportExportService.cs" />
+    <Compile Include="Services\LogCryptoService.cs" />
+    <Compile Include="Services\LoginLogService.cs" />
+    <Compile Include="Services\StudioActionLogService.cs" />
+    <Compile Include="Services\StudioLogSuppressor.cs" />
+    <Compile Include="UI\Theme.cs" />
+    <Compile Include="UI\IconGlyphs.cs" />
+    <Compile Include="UI\Controls\SearchableComboBox.cs" />
+    <Compile Include="UI\AuthGate.cs" />
+    <Compile Include="UI\MainForm.cs" />
+    <Compile Include="UI\HomeTab.cs" />
+    <Compile Include="UI\StockTab.cs" />
+    <Compile Include="UI\CategoriesTab.cs" />
+    <Compile Include="UI\HistoryTab.cs" />
+    <Compile Include="UI\LoginLogsTab.cs" />
+    <Compile Include="UI\StudioLogsTab.cs" />
+    <Compile Include="UI\ArchiveSettingsTab.cs" />
+    <Compile Include="UI\SettingsTab.cs" />
+    <Compile Include="UI\Dialogs\AddEditCategoryDialog.cs" />
+    <Compile Include="UI\Dialogs\AddEditStockDialog.cs" />
+    <Compile Include="UI\Dialogs\AddCustomChargeDialog.cs" />
+    <Compile Include="UI\Dialogs\AddExpenseDialog.cs" />
+    <Compile Include="UI\Dialogs\AddEditMonthlyExpenseDialog.cs" />
+    <Compile Include="UI\Dialogs\PasswordPromptDialog.cs" />
+    <Compile Include="UI\Dialogs\SetPasswordDialog.cs" />
+    <Compile Include="UI\Dialogs\TypeToConfirmDialog.cs" />
+    <Compile Include="UI\Dialogs\BreakdownReportForm.cs" />
+    <Compile Include="UI\Dialogs\MonthSummaryReportForm.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="App.config" />
+    <None Include="packages.config" />
+    <Content Include="Properties\app.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+
+  <!-- Best-effort: the Stub package's own build target, if MSBuild honors it. -->
+  <Import Project="$(SQLiteStubPackageDir)Stub.System.Data.SQLite.Core.NetFramework.targets" Condition="Exists('$(SQLiteStubPackageDir)Stub.System.Data.SQLite.Core.NetFramework.targets')" />
+
+  <!-- Diagnostic only - prints what the .NET 4.6 reference-assemblies override actually
+       resolved to, right before GetReferenceAssemblyPaths runs. If MSB3644 ever reappears,
+       this shows in the build log exactly which path was checked and whether it existed,
+       instead of having to guess blind again. Importance="high" so it shows even without -v. -->
+  <Target Name="DiagnoseNetFx46RefAssemblies" BeforeTargets="GetReferenceAssemblyPaths">
+    <PropertyGroup>
+      <_NetFx46ResolvedRefDir>$(TargetFrameworkRootPath).NETFramework\v4.6\</_NetFx46ResolvedRefDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <_NetFx46MscorlibCheck Include="$(_NetFx46ResolvedRefDir)mscorlib.dll" Condition="Exists('$(_NetFx46ResolvedRefDir)mscorlib.dll')" />
+    </ItemGroup>
+    <Message Importance="high" Text="[diag] MSBuildProjectDirectory        = $(MSBuildProjectDirectory)" />
+    <Message Importance="high" Text="[diag] NetFx46RefAssembliesPackageDir = $(NetFx46RefAssembliesPackageDir)" />
+    <Message Importance="high" Text="[diag] TargetFrameworkRootPath        = $(TargetFrameworkRootPath)" />
+    <Message Importance="high" Text="[diag] Resolved ref assemblies dir    = $(_NetFx46ResolvedRefDir)" />
+    <Message Importance="high" Text="[diag] Dir exists (System.IO check)   = $([System.IO.Directory]::Exists('$(_NetFx46ResolvedRefDir)'))" />
+    <Message Importance="high" Text="[diag] mscorlib.dll found (Exists())  = @(_NetFx46MscorlibCheck->Count()) match(es)" />
+  </Target>
+
+  <!-- Guaranteed fallback: this package's own copy-to-output target is known to be flaky
+       in headless/CI builds (silently skips copying SQLite.Interop.dll in some MSBuild
+       versions - see sqlite.org forum discussions on this exact package). Rather than
+       depend on that working, copy the native interop DLLs to the output's x86\ and x64\
+       subfolders ourselves, every build, unconditionally. App.config's <probing> element
+       already tells the runtime to look in x86\ and x64\ next to the exe. -->
+  <Target Name="CopySQLiteInteropFilesOurselves" AfterTargets="Build;Rebuild">
+    <ItemGroup>
+      <_SQLiteInteropX86 Include="$(SQLiteStubPackageDir)x86\SQLite.Interop.dll" Condition="Exists('$(SQLiteStubPackageDir)x86\SQLite.Interop.dll')" />
+      <_SQLiteInteropX64 Include="$(SQLiteStubPackageDir)x64\SQLite.Interop.dll" Condition="Exists('$(SQLiteStubPackageDir)x64\SQLite.Interop.dll')" />
+    </ItemGroup>
+    <MakeDir Directories="$(OutDir)x86" Condition="'@(_SQLiteInteropX86)' != ''" />
+    <MakeDir Directories="$(OutDir)x64" Condition="'@(_SQLiteInteropX64)' != ''" />
+    <Copy SourceFiles="@(_SQLiteInteropX86)" DestinationFolder="$(OutDir)x86\" Condition="'@(_SQLiteInteropX86)' != ''" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_SQLiteInteropX64)" DestinationFolder="$(OutDir)x64\" Condition="'@(_SQLiteInteropX64)' != ''" SkipUnchangedFiles="true" />
+    <Warning Text="SQLite.Interop.dll not found under $(SQLiteStubPackageDir)x86 or x64 - the app will fail at runtime when it opens the database. Check that the Stub.System.Data.SQLite.Core.NetFramework package was restored correctly." Condition="'@(_SQLiteInteropX86)' == '' and '@(_SQLiteInteropX64)' == ''" />
+  </Target>
+</Project>
