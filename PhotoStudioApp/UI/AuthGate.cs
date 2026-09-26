@@ -29,8 +29,11 @@ namespace PhotoStudioApp.UI
             // attempts is still active (see PasswordPromptDialog, which sets this the moment
             // MaxPasswordAttempts is reached) - this is the "stop for N minutes" half of the
             // lockout feature; the "N wrong attempts" half is MaxPasswordAttempts itself.
+            // RoundtripKind alone is correct here (and the only style allowed together with it) -
+            // the stored value was written with "o"/round-trip format, which already embeds the
+            // UTC "Z" marker, so no AssumeUniversal/AssumeLocal is needed to recover Kind=Utc.
             if (DateTime.TryParse(settings.PasswordLockoutUntilUtc, null,
-                    System.Globalization.DateTimeStyles.RoundtripKind | System.Globalization.DateTimeStyles.AssumeUniversal,
+                    System.Globalization.DateTimeStyles.RoundtripKind,
                     out DateTime lockoutUntilUtc) && lockoutUntilUtc > DateTime.UtcNow)
             {
                 string remaining = FormatRemaining(lockoutUntilUtc - DateTime.UtcNow);
