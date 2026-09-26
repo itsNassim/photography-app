@@ -13,8 +13,13 @@ namespace PhotoStudioApp.Services
             ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".gif", ".raw", ".cr2", ".nef", ".webp"
         };
 
-        /// <summary>Counts image files directly inside a category folder. Returns 0 (not an error)
-        /// if the folder does not exist yet - staff may not have created it/dropped anything yet.</summary>
+        /// <summary>Counts image files directly inside a category folder. This is the BILLED
+        /// count - it deliberately counts every photo, including ones that will later be purged
+        /// by prefix (e.g. "re...", "GSW..."): those are still real photos taken and billed for,
+        /// the prefix purge afterwards is disk cleanup only and must never reduce what's billed.
+        /// See ClosingService.CloseDay, which always counts a category BEFORE purging it, for
+        /// exactly that reason. Returns 0 (not an error) if the folder does not exist yet - staff
+        /// may not have created it/dropped anything yet.</summary>
         public int CountPhotos(string absoluteFolderPath)
         {
             if (!Directory.Exists(absoluteFolderPath))
@@ -24,14 +29,27 @@ namespace PhotoStudioApp.Services
                 .Count(f => PhotoExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()));
         }
 
+        /// <summary>Parses the comma-separated PurgedFilePrefixesCsv setting into a clean list of
+        /// non-empty, trimmed prefixes, for DeleteFilesWithPrefixes.</summary>
+        public static string[] ParsePrefixCsv(string csv)
+        {
+            return (csv ?? "")
+                .Split(',')
+                .Select(p => p.Trim())
+                .Where(p => p.Length > 0)
+                .ToArray();
+        }
+
         public void EnsureFolderExists(string absoluteFolderPath)
         {
             Directory.CreateDirectory(absoluteFolderPath);
         }
 
         /// <summary>Deletes any file directly inside the folder whose name starts with one of
-        /// the given prefixes (case-insensitive) - used to purge rejects/duplicates (e.g. "re...",
-        /// "GSW...") from a category folder BEFORE counting or moving anything at close time.
+        /// the given prefixes (case-insensitive) - used to clean up rejects/duplicates (e.g.
+        /// "re...", "GSW...") from a category folder AFTER that folder's photos have already been
+        /// counted/billed for the day (see ClosingService.CloseDay) - this is disk cleanup only
+        /// and must never run before the count, or those files would be billed for nothing.
         /// Every matching file is first CALCULATED (tallied into a fixed list) and only THEN
         /// deleted - never deleted opportunistically while still being enumerated - so the
         /// returned count is always an accurate tally of what was purged, never a guess made
@@ -61,7 +79,7 @@ namespace PhotoStudioApp.Services
             {
                 RecycleFile(file);
                 LogStudioAction(Path.GetFileName(file), "Suppression (purge)", categoryName,
-                    "Préfixe rejeté, retiré avant clôture - envoyé a la corbeille");
+                    "Déjà compté/facturé - nettoyage du dossier après comptage - envoyé a la corbeille");
             }
 
             return matchingFiles.Count;

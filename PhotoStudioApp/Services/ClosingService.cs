@@ -52,11 +52,7 @@ namespace PhotoStudioApp.Services
             // through the custom charges created against them during the day.
             var categories = _categoryRepo.GetActiveFolderCategories();
 
-            string[] purgedPrefixes = (settings.PurgedFilePrefixesCsv ?? "")
-                .Split(',')
-                .Select(p => p.Trim())
-                .Where(p => p.Length > 0)
-                .ToArray();
+            string[] purgedPrefixes = FolderCountService.ParsePrefixCsv(settings.PurgedFilePrefixesCsv);
 
             DateTime closeDateValue = DateTime.ParseExact(settings.CurrentWorkDate, "yyyy-MM-dd", null);
             string workingFolderName = closeDateValue.ToString(settings.DateFolderFormat, AppCulture.French);
@@ -71,8 +67,10 @@ namespace PhotoStudioApp.Services
 
             int totalPhotosFound = 0;
 
-            // 1) For each category folder: purge rejected files FIRST (before any copy/count),
-            //    then count what's left, then remember it for the move step below.
+            // 1) For each category folder: count EVERYTHING first (this is the billed total -
+            //    a reject/duplicate-prefixed photo was still taken and is still billed for), and
+            //    only THEN clean up the reject/duplicate-prefixed files from disk. Purging before
+            //    counting would silently bill for fewer photos than were actually taken.
             //    Suppressed: FolderCountService already logs each purge/move explicitly and more
             //    informatively than the raw FileSystemWatcher events they also trigger would -
             //    see StudioLogSuppressor's own comments for why both firing would be wrong.
@@ -95,13 +93,16 @@ namespace PhotoStudioApp.Services
                         continue;
                     }
 
-                    // Rejects/duplicates (e.g. "re...", "GSW...") are calculated (counted) first,
-                    // then deleted - the tally is kept below for the day's audit trail so nothing
-                    // is ever silently discarded without being accounted for.
-                    int purged = _folders.DeleteFilesWithPrefixes(catAbs, cat.Name, purgedPrefixes);
-
+                    // Bill for every photo in the folder, prefixed or not, BEFORE anything is
+                    // deleted.
                     int count = _folders.CountPhotos(catAbs);
                     totalPhotosFound += count;
+
+                    // THEN clean up the reject/duplicate-prefixed files from disk - the tally
+                    // (PurgedCount) is a subset of the count above, kept for the day's audit
+                    // trail, never a deduction from it.
+                    int purged = _folders.DeleteFilesWithPrefixes(catAbs, cat.Name, purgedPrefixes);
+
                     close.LineItems.Add(new DailyCloseLineItem
                     {
                         CategoryId = cat.Id,
