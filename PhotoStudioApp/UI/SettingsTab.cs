@@ -8,12 +8,12 @@ using PhotoStudioApp.Services;
 namespace PhotoStudioApp.UI
 {
     /// <summary>Settings that don't need the admin password to change - basic studio setup
-    /// (paths, folder-name format, closed weekdays), correcting today's work date, and the
-    /// no-password "Archiver la journée" button employees use once an admin has armed it.
-    /// Everything password-protected (the password itself, attempt/lockout limits, archive
-    /// retention, purge prefixes, the worker-archive feature's master on/off) lives in the
-    /// Historique/Archive tab's own "Paramètres" sub-tab instead - see ArchiveSettingsTab -
-    /// since simply reaching that tab already requires the password, unlike this one.</summary>
+    /// (paths, folder-name format, closed weekdays, purge-prefix list), correcting today's work
+    /// date, and the no-password "Archiver la journée" button employees use once an admin has
+    /// armed it. Everything password-protected (the password itself, attempt/lockout limits,
+    /// archive retention, the worker-archive feature's master on/off) lives in the Historique/
+    /// Archive tab's own "Paramètres admin" sub-tab instead - see ArchiveSettingsTab - since
+    /// simply reaching that tab already requires the password, unlike this one.</summary>
     public class SettingsTab : UserControl
     {
         public event EventHandler SettingsSaved;
@@ -26,6 +26,8 @@ namespace PhotoStudioApp.UI
         private TextBox _archivePathBox;
         private TextBox _dateFormatBox;
         private CheckedListBox _closedDaysList;
+        private ListBox _prefixesList;
+        private TextBox _newPrefixBox;
         private DateTimePicker _currentWorkDatePicker;
         private CheckBox _workerArchiveArmedCheck;
         private Button _workerArchiveBtn;
@@ -130,6 +132,32 @@ namespace PhotoStudioApp.UI
             card.Controls.Add(_closedDaysList, 1, row);
             row++;
 
+            AddLabel(card, "Prefixes de fichiers a supprimer\na la clôture (ex. \"re\") :", row);
+            var prefixPanel = new TableLayoutPanel { ColumnCount = 1, AutoSize = true };
+            prefixPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            prefixPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            _prefixesList = new ListBox { Width = 200, Height = 90, Font = Theme.FontBase };
+            var prefixInputRow = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 6, 0, 0) };
+            _newPrefixBox = new TextBox { Width = 110, Font = Theme.FontBase };
+            var addPrefixBtn = Theme.MakeSecondaryButton("+ Ajouter");
+            addPrefixBtn.Width = 90;
+            addPrefixBtn.Click += AddPrefixBtn_Click;
+            var removePrefixBtn = Theme.MakeDangerButton("Retirer");
+            removePrefixBtn.Width = 80;
+            removePrefixBtn.Click += RemovePrefixBtn_Click;
+            prefixInputRow.Controls.Add(_newPrefixBox);
+            prefixInputRow.Controls.Add(addPrefixBtn);
+            prefixInputRow.Controls.Add(removePrefixBtn);
+            prefixPanel.Controls.Add(_prefixesList, 0, 0);
+            prefixPanel.Controls.Add(prefixInputRow, 0, 1);
+            card.Controls.Add(prefixPanel, 1, row);
+            card.Controls.Add(new Label
+            {
+                Text = "Tout fichier dont le nom commence par l'un\nde ces prefixes est envoye a la corbeille\navant le comptage, dans chaque dossier de\ncatégorie.",
+                AutoSize = true, ForeColor = System.Drawing.Color.Gray, Margin = new Padding(3, 8, 0, 0)
+            }, 2, row);
+            row++;
+
             AddLabel(card, "Date de travail actuelle\n(protégé par mot de passe) :", row);
             var datePanel = new FlowLayoutPanel { AutoSize = true };
             _currentWorkDatePicker = new DateTimePicker { Width = 150, Format = DateTimePickerFormat.Short, Font = Theme.FontBase };
@@ -154,7 +182,7 @@ namespace PhotoStudioApp.UI
             var workerArchivePanel = new TableLayoutPanel { AutoSize = true, ColumnCount = 1 };
             _workerArchiveDisabledLabel = new Label
             {
-                Text = "Fonctionnalité désactivée - activez-la dans Historique > Paramètres.",
+                Text = "Fonctionnalité désactivée - activez-la dans Historique > Paramètres admin.",
                 AutoSize = true, ForeColor = System.Drawing.Color.Gray, Margin = new Padding(0, 8, 0, 0)
             };
             var armRow = new FlowLayoutPanel { AutoSize = true };
@@ -201,6 +229,32 @@ namespace PhotoStudioApp.UI
             }
         }
 
+        private void AddPrefixBtn_Click(object sender, EventArgs e)
+        {
+            string prefix = _newPrefixBox.Text.Trim();
+            if (string.IsNullOrEmpty(prefix))
+                return;
+
+            foreach (var existing in _prefixesList.Items)
+            {
+                if (string.Equals(existing.ToString(), prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    MessageBox.Show("Ce prefixe est déjà dans la liste.", "Deja present", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+            }
+
+            _prefixesList.Items.Add(prefix);
+            _newPrefixBox.Clear();
+            _newPrefixBox.Focus();
+        }
+
+        private void RemovePrefixBtn_Click(object sender, EventArgs e)
+        {
+            if (_prefixesList.SelectedIndex >= 0)
+                _prefixesList.Items.RemoveAt(_prefixesList.SelectedIndex);
+        }
+
         public void RefreshAll()
         {
             var s = _repo.LoadAll();
@@ -214,6 +268,10 @@ namespace PhotoStudioApp.UI
                 var dow = FrenchWeekdays[i].Value;
                 _closedDaysList.SetItemChecked(i, closed.Contains(dow));
             }
+
+            _prefixesList.Items.Clear();
+            foreach (var p in (s.PurgedFilePrefixesCsv ?? "").Split(',').Select(x => x.Trim()).Where(x => x.Length > 0))
+                _prefixesList.Items.Add(p);
 
             if (DateTime.TryParseExact(s.CurrentWorkDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out DateTime workDate))
                 _currentWorkDatePicker.Value = workDate;
@@ -230,7 +288,7 @@ namespace PhotoStudioApp.UI
         /// one use - a worker can then close/archive the day themselves without ever seeing
         /// revenue figures. No password here: this switch is purely a misclick safeguard (so
         /// the button doesn't sit clickable by accident), not a security gate - the real
-        /// security gate is the master on/off for the whole feature in Historique > Paramètres.</summary>
+        /// security gate is the master on/off for the whole feature in Historique > Paramètres admin.</summary>
         private void WorkerArchiveArmedCheck_Click(object sender, EventArgs e)
         {
             var s = _repo.LoadAll();
@@ -385,6 +443,7 @@ namespace PhotoStudioApp.UI
 
             var checkedDays = _closedDaysList.CheckedIndices.Cast<int>().Select(i => FrenchWeekdays[i].Value);
             s.ClosedWeekdaysCsv = WorkdayCalculator.ToCsv(checkedDays);
+            s.PurgedFilePrefixesCsv = string.Join(",", _prefixesList.Items.Cast<object>().Select(o => o.ToString()));
 
             try
             {

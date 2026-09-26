@@ -36,6 +36,10 @@ namespace PhotoStudioApp.UI
         // single UI refresh a few hundred ms later, rather than refreshing 40 times in a row.
         private readonly List<FileSystemWatcher> _folderWatchers = new List<FileSystemWatcher>();
         private readonly Dictionary<FileSystemWatcher, string> _watcherCategoryNames = new Dictionary<FileSystemWatcher, string>();
+        /// <summary>Category label used in the studio action log for events that happen directly
+        /// in the studio root folder itself (see SetupFolderWatchers' extra root-level watcher),
+        /// rather than inside any one category's own folder.</summary>
+        private const string StudioRootFolderLabel = "(dossier racine du studio)";
         private Timer _watchDebounce;
 
         public HomeTab()
@@ -403,9 +407,15 @@ namespace PhotoStudioApp.UI
             // categories a chaque ouverture, donc rien a mettre en cache ici.
         }
 
-        /// <summary>(Re)creates one FileSystemWatcher per active folder-backed category so photo
-        /// counts update in real time (the instant a file is added/removed) instead of only on
-        /// the next timer tick. Called at startup and whenever categories or the studio root
+        /// <summary>(Re)creates one FileSystemWatcher per folder-backed category - active or not,
+        /// see GetAllFolderCategories - so photo counts update in real time (the instant a file
+        /// is added/removed) instead of only on the next timer tick, AND so every category's
+        /// folder gets logged to the studio action log even if the category itself was later
+        /// deactivated. Also adds one more, non-recursive watcher on the studio root folder
+        /// itself, so activity that happens directly in the root - a stray file dropped there, or
+        /// a folder appearing/renamed/disappearing right at the root, e.g. a category folder
+        /// itself being renamed on disk - gets logged too, not just what happens inside a
+        /// category's own subtree. Called at startup and whenever categories or the studio root
         /// path might have changed (see MainForm wiring).</summary>
         public void SetupFolderWatchers()
         {
@@ -421,7 +431,7 @@ namespace PhotoStudioApp.UI
             if (string.IsNullOrWhiteSpace(settings.StudioRootPath))
                 return;
 
-            foreach (var cat in _categoryRepo.GetActiveFolderCategories())
+            foreach (var cat in _categoryRepo.GetAllFolderCategories())
             {
                 string abs;
                 try { abs = Path.Combine(settings.StudioRootPath, cat.FolderRelativePath); }
@@ -453,6 +463,33 @@ namespace PhotoStudioApp.UI
                     // Best-effort - if a watcher can't be created for this folder (e.g. a
                     // network path that doesn't support it), the 15s safety-net poll still
                     // catches it eventually.
+                }
+            }
+
+            if (Directory.Exists(settings.StudioRootPath))
+            {
+                try
+                {
+                    var rootWatcher = new FileSystemWatcher(settings.StudioRootPath)
+                    {
+                        NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.DirectoryName,
+                        // NOT recursive - every category folder already has its own recursive
+                        // watcher above, so this one only needs to see entries directly inside the
+                        // studio root itself; making it recursive too would log every category's
+                        // activity a second time.
+                        IncludeSubdirectories = false
+                    };
+                    rootWatcher.Created += FolderWatcher_Changed;
+                    rootWatcher.Deleted += FolderWatcher_Changed;
+                    rootWatcher.Renamed += FolderWatcher_Changed;
+                    rootWatcher.Changed += FolderWatcher_Changed;
+                    rootWatcher.EnableRaisingEvents = true;
+                    _folderWatchers.Add(rootWatcher);
+                    _watcherCategoryNames[rootWatcher] = StudioRootFolderLabel;
+                }
+                catch
+                {
+                    // Best-effort, same as above.
                 }
             }
         }

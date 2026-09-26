@@ -25,6 +25,7 @@ namespace PhotoStudioApp.UI
         private ArchiveSettingsTab _archiveSettingsTab;
         private Panel _lockedPanel;
         private Panel _contentPanel;
+        private Label _lockLabel;
         private bool _unlocked;
 
         public HistoryTab()
@@ -59,6 +60,7 @@ namespace PhotoStudioApp.UI
                 Margin = new Padding(0, 0, 0, 12),
                 TextAlign = System.Drawing.ContentAlignment.MiddleCenter
             };
+            _lockLabel = lockLabel;
             var unlockBtn = Theme.MakePrimaryButton("Déverrouiller");
             unlockBtn.Width = 160;
             unlockBtn.Click += (s, e) => TryUnlock();
@@ -79,7 +81,7 @@ namespace PhotoStudioApp.UI
             var monthPage = new TabPage("Résumé mensuel") { BackColor = Theme.Background };
             var loginLogsPage = new TabPage("Journal de connexion") { BackColor = Theme.Background };
             var studioLogsPage = new TabPage("Journal des actions studio") { BackColor = Theme.Background };
-            var settingsPage = new TabPage("Paramètres") { BackColor = Theme.Background };
+            var settingsPage = new TabPage("Paramètres admin") { BackColor = Theme.Background };
             innerTabs.TabPages.Add(daysPage);
             innerTabs.TabPages.Add(monthPage);
             innerTabs.TabPages.Add(loginLogsPage);
@@ -227,6 +229,14 @@ namespace PhotoStudioApp.UI
 
         private void ShowLocked()
         {
+            // First run: no admin password has ever been set, so there's nothing yet for
+            // AuthGate to check - reflect that on the lock screen itself (TryUnlock below is
+            // what actually skips the password prompt in this case).
+            var settings = _settingsRepo.LoadAll();
+            _lockLabel.Text = string.IsNullOrEmpty(settings.PasswordHash)
+                ? "Aucun mot de passe n'est encore defini.\nCliquez pour entrer et en definir un (onglet Paramètres admin)."
+                : "L'historique est protégé par mot de passe.";
+
             _lockedPanel.Visible = true;
             _lockedPanel.BringToFront();
             _contentPanel.Visible = false;
@@ -241,6 +251,19 @@ namespace PhotoStudioApp.UI
 
         private void TryUnlock()
         {
+            var settings = _settingsRepo.LoadAll();
+            if (string.IsNullOrEmpty(settings.PasswordHash))
+            {
+                // Nothing to check yet - let the user straight in so they can set a password
+                // from the new "Paramètres admin" sub-tab. Without this, a brand-new install
+                // could never open this tab at all: AuthGate refuses every other password
+                // check until a password exists, and the only place to set one is in here.
+                _unlocked = true;
+                ShowContent();
+                LoadHistory();
+                return;
+            }
+
             if (AuthGate.RequireAdminPassword(this, "Déverrouiller l'historique", "Déverrouiller"))
             {
                 _unlocked = true;
@@ -482,7 +505,7 @@ namespace PhotoStudioApp.UI
             {
                 MessageBox.Show(
                     "La duree de conservation n'est pas configuree (0 = desactive).\n" +
-                    "Definissez-la dans l'onglet Paramètres (dans Historique) pour utiliser ce bouton.",
+                    "Definissez-la dans l'onglet Paramètres admin (dans Historique) pour utiliser ce bouton.",
                     "Nettoyage non configure", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }

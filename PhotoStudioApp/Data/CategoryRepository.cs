@@ -48,6 +48,19 @@ namespace PhotoStudioApp.Data
             return list;
         }
 
+        /// <summary>EVERY folder-backed category, active or not - used only for setting up
+        /// studio-action-log watchers (HomeTab.SetupFolderWatchers), so a deactivated category's
+        /// folder still gets logged even though it no longer counts toward revenue or shows on
+        /// the Home dashboard. Deliberately separate from GetActiveFolderCategories, which is
+        /// still what counting/revenue logic should use.</summary>
+        public List<Category> GetAllFolderCategories()
+        {
+            var list = new List<Category>();
+            foreach (var c in GetAllCategories(includeInactive: true))
+                if (c.HasFolder) list.Add(c);
+            return list;
+        }
+
         /// <summary>Active, no-folder fixed-price "service" categories only - what the
         /// "add extra charge" screen offers alongside stock items.</summary>
         public List<Category> GetActiveServiceCategories()

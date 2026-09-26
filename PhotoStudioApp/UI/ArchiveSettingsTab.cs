@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Linq;
 using System.Windows.Forms;
 using PhotoStudioApp.Data;
 using PhotoStudioApp.Services;
@@ -11,10 +10,10 @@ namespace PhotoStudioApp.UI
     /// per-field password check because simply reaching this tab already required the admin
     /// password (see HistoryTab's lock). Holds: the admin password itself, how many wrong
     /// attempts are allowed and how long a lockout lasts afterwards, how many days of archives/
-    /// logs to keep, which filename prefixes get purged at close time, and the master on/off for
-    /// the no-password "Archiver la journée" worker feature (moved here from the main Paramètres
-    /// tab, which keeps only settings that don't need a password - studio/archive paths, date
-    /// format, closed days, changing the work date, and the worker-archive button itself).</summary>
+    /// logs to keep, and the master on/off for the no-password "Archiver la journée" worker
+    /// feature (moved here from the main Paramètres tab, which keeps everything that doesn't
+    /// need a password - studio/archive paths, date format, closed days, the purge-prefix list,
+    /// changing the work date, and the worker-archive button itself).</summary>
     public class ArchiveSettingsTab : UserControl
     {
         private readonly SettingsRepository _repo = new SettingsRepository();
@@ -23,8 +22,6 @@ namespace PhotoStudioApp.UI
         private NumericUpDown _maxAttemptsBox;
         private NumericUpDown _lockoutMinutesBox;
         private NumericUpDown _retentionDaysBox;
-        private ListBox _prefixesList;
-        private TextBox _newPrefixBox;
         private CheckBox _workerArchiveFeatureCheck;
 
         public ArchiveSettingsTab()
@@ -110,32 +107,6 @@ namespace PhotoStudioApp.UI
             }, 2, row);
             row++;
 
-            AddLabel(card, "Prefixes de fichiers a supprimer\na la clôture (ex. \"re\") :", row);
-            var prefixPanel = new TableLayoutPanel { ColumnCount = 1, AutoSize = true };
-            prefixPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            prefixPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            _prefixesList = new ListBox { Width = 200, Height = 90, Font = Theme.FontBase };
-            var prefixInputRow = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 6, 0, 0) };
-            _newPrefixBox = new TextBox { Width = 110, Font = Theme.FontBase };
-            var addPrefixBtn = Theme.MakeSecondaryButton("+ Ajouter");
-            addPrefixBtn.Width = 90;
-            addPrefixBtn.Click += AddPrefixBtn_Click;
-            var removePrefixBtn = Theme.MakeDangerButton("Retirer");
-            removePrefixBtn.Width = 80;
-            removePrefixBtn.Click += RemovePrefixBtn_Click;
-            prefixInputRow.Controls.Add(_newPrefixBox);
-            prefixInputRow.Controls.Add(addPrefixBtn);
-            prefixInputRow.Controls.Add(removePrefixBtn);
-            prefixPanel.Controls.Add(_prefixesList, 0, 0);
-            prefixPanel.Controls.Add(prefixInputRow, 0, 1);
-            card.Controls.Add(prefixPanel, 1, row);
-            card.Controls.Add(new Label
-            {
-                Text = "Tout fichier dont le nom commence par l'un\nde ces prefixes est envoye a la corbeille\navant le comptage, dans chaque dossier de\ncatégorie.",
-                AutoSize = true, ForeColor = System.Drawing.Color.Gray, Margin = new Padding(3, 8, 0, 0)
-            }, 2, row);
-            row++;
-
             AddLabel(card, "Archivage sans mot de passe\npour les employés :", row);
             var workerArchivePanel = new TableLayoutPanel { AutoSize = true, ColumnCount = 1 };
             _workerArchiveFeatureCheck = new CheckBox
@@ -181,37 +152,7 @@ namespace PhotoStudioApp.UI
             _lockoutMinutesBox.Value = Math.Max(1, Math.Min(1440, s.PasswordLockoutMinutes));
             _retentionDaysBox.Value = Math.Max(0, Math.Min(3650, s.ArchiveRetentionDays));
 
-            _prefixesList.Items.Clear();
-            foreach (var p in (s.PurgedFilePrefixesCsv ?? "").Split(',').Select(x => x.Trim()).Where(x => x.Length > 0))
-                _prefixesList.Items.Add(p);
-
             _workerArchiveFeatureCheck.Checked = s.WorkerArchiveFeatureEnabled;
-        }
-
-        private void AddPrefixBtn_Click(object sender, EventArgs e)
-        {
-            string prefix = _newPrefixBox.Text.Trim();
-            if (string.IsNullOrEmpty(prefix))
-                return;
-
-            foreach (var existing in _prefixesList.Items)
-            {
-                if (string.Equals(existing.ToString(), prefix, StringComparison.OrdinalIgnoreCase))
-                {
-                    MessageBox.Show("Ce prefixe est déjà dans la liste.", "Deja present", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return;
-                }
-            }
-
-            _prefixesList.Items.Add(prefix);
-            _newPrefixBox.Clear();
-            _newPrefixBox.Focus();
-        }
-
-        private void RemovePrefixBtn_Click(object sender, EventArgs e)
-        {
-            if (_prefixesList.SelectedIndex >= 0)
-                _prefixesList.Items.RemoveAt(_prefixesList.SelectedIndex);
         }
 
         private void SetPwdBtn_Click(object sender, EventArgs e)
@@ -270,7 +211,6 @@ namespace PhotoStudioApp.UI
             s.MaxPasswordAttempts = (int)_maxAttemptsBox.Value;
             s.PasswordLockoutMinutes = (int)_lockoutMinutesBox.Value;
             s.ArchiveRetentionDays = (int)_retentionDaysBox.Value;
-            s.PurgedFilePrefixesCsv = string.Join(",", _prefixesList.Items.Cast<object>().Select(o => o.ToString()));
             _repo.SaveAll(s);
             MessageBox.Show("Paramètres administrateur enregistres.", "Termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }

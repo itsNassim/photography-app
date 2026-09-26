@@ -20,7 +20,7 @@ namespace PhotoStudioApp.UI
             if (string.IsNullOrEmpty(settings.PasswordHash))
             {
                 MessageBox.Show(owner,
-                    "Aucun mot de passe administrateur n'est defini. Definissez-en un dans l'onglet Historique > Paramètres.",
+                    "Aucun mot de passe administrateur n'est defini. Definissez-en un dans l'onglet Historique > Paramètres admin.",
                     "Mot de passe requis", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return false;
             }
