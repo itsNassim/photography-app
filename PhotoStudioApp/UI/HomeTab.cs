@@ -437,12 +437,12 @@ namespace PhotoStudioApp.UI
         /// see GetAllFolderCategories - so photo counts update in real time (the instant a file
         /// is added/removed) instead of only on the next timer tick, AND so every category's
         /// folder gets logged to the studio action log even if the category itself was later
-        /// deactivated. Also adds one more, non-recursive watcher on the studio root folder
-        /// itself, so activity that happens directly in the root - a stray file dropped there, or
-        /// a folder appearing/renamed/disappearing right at the root, e.g. a category folder
-        /// itself being renamed on disk - gets logged too, not just what happens inside a
-        /// category's own subtree. Called at startup and whenever categories or the studio root
-        /// path might have changed (see MainForm wiring).</summary>
+        /// deactivated. ALSO covers every other folder anywhere under the studio root that isn't
+        /// itself a registered category - the day's "today" working folder, an orphaned/renamed
+        /// category folder, or anything else - via ScanForOrphanWatchers below, so genuinely
+        /// nothing that happens anywhere inside the studio root goes unwatched. Called at startup
+        /// and whenever categories or the studio root path might have changed (see MainForm
+        /// wiring).</summary>
         public void SetupFolderWatchers()
         {
             lock (_watcherLock)
@@ -461,6 +461,7 @@ namespace PhotoStudioApp.UI
             if (string.IsNullOrWhiteSpace(settings.StudioRootPath))
                 return;
 
+            var categoryPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var cat in _categoryRepo.GetAllFolderCategories())
             {
                 string abs;
@@ -474,6 +475,7 @@ namespace PhotoStudioApp.UI
                 // shots into a client-name subfolder, for instance) need to be watched and
                 // logged too, not just the category folder's own top level.
                 TryAddWatcher(abs, cat.Name, recursive: true);
+                categoryPaths.Add(NormalizePath(abs));
             }
 
             if (Directory.Exists(settings.StudioRootPath))
@@ -483,19 +485,78 @@ namespace PhotoStudioApp.UI
                 // itself; making it recursive too would log every category's activity a second
                 // time. A brand-new sub-folder that appears directly in the root (not yet a
                 // registered category) gets its OWN dynamic recursive watcher the instant it's
-                // created instead - see HandleCreated - so nothing inside it is ever missed
-                // while waiting for the next full rebuild of this method.
+                // created instead - see HandleCreated.
                 TryAddWatcher(settings.StudioRootPath, StudioRootFolderLabel, recursive: false);
+
+                try
+                {
+                    ScanForOrphanWatchers(settings.StudioRootPath, categoryPaths);
+                }
+                catch
+                {
+                    // Best-effort - a permissions/I-O issue partway through the scan shouldn't
+                    // crash startup; whatever was already added above still works.
+                }
             }
+        }
+
+        /// <summary>Recursively walks every folder under dir that ISN'T itself a registered
+        /// category (those already got their own recursive watcher above) and gives each one
+        /// exactly the coverage it needs, with no overlap: a folder with NO registered category
+        /// anywhere below it (the day's "today" working folder, a leftover/renamed category
+        /// folder, or anything else) gets ONE recursive watcher covering its whole subtree and
+        /// scanning stops there - nothing further to add. A folder that IS an ANCESTOR of a
+        /// registered category (e.g. "amateur", the parent of the "amateur\12 identite" and
+        /// "amateur\16 identite" category folders) gets its own NON-recursive watcher instead -
+        /// so a file dropped directly inside "amateur" itself (alongside its category
+        /// subfolders) still gets logged - and scanning continues one level deeper to find that
+        /// nested category (already covered, skipped) and any other orphan siblings next to it.
+        /// This is exactly what closes the original gap: "amateur" itself, and folders like a
+        /// "today" working folder with no category inside it at all, previously had no watcher
+        /// covering their own direct contents.</summary>
+        private void ScanForOrphanWatchers(string dir, HashSet<string> categoryPaths)
+        {
+            foreach (var subDir in Directory.GetDirectories(dir))
+            {
+                string normalized;
+                try { normalized = NormalizePath(subDir); }
+                catch { continue; }
+
+                if (categoryPaths.Contains(normalized))
+                    continue; // already has its own recursive watcher from the category loop
+
+                bool hasCategoryBelow = categoryPaths.Any(p =>
+                    p.StartsWith(normalized + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
+
+                if (hasCategoryBelow)
+                {
+                    TryAddWatcher(subDir, Path.GetFileName(subDir), recursive: false);
+                    try { ScanForOrphanWatchers(subDir, categoryPaths); }
+                    catch { /* best-effort - see SetupFolderWatchers' own catch */ }
+                }
+                else
+                {
+                    TryAddWatcher(subDir, Path.GetFileName(subDir), recursive: true);
+                }
+            }
+        }
+
+        /// <summary>Full path, trailing separator trimmed, for reliable case-insensitive
+        /// comparison/prefix-matching between paths built in different ways (Path.Combine vs.
+        /// Directory.GetDirectories, for instance).</summary>
+        private static string NormalizePath(string path)
+        {
+            return Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         }
 
         /// <summary>Creates, wires up, starts and registers one FileSystemWatcher for path,
         /// labelled label in the studio action log - the single place a watcher gets created,
-        /// used for every category folder, the studio root itself (both from
-        /// SetupFolderWatchers), and any brand-new sub-folder discovered directly in the root
-        /// after startup (see HandleCreated), so all three always behave identically.
-        /// Best-effort: swallows failures (e.g. a network path that doesn't support watching)
-        /// since the 15s safety-net poll still catches those folders eventually.</summary>
+        /// used for every category folder, the studio root itself, every "orphan" folder found
+        /// by ScanForOrphanWatchers (both from SetupFolderWatchers), and any brand-new sub-folder
+        /// discovered live inside a non-recursive watcher after startup (see HandleCreated), so
+        /// all of these always behave identically. Best-effort: swallows failures (e.g. a network
+        /// path that doesn't support watching) since the 15s safety-net poll still catches those
+        /// folders eventually.</summary>
         private void TryAddWatcher(string path, string label, bool recursive)
         {
             try
@@ -572,7 +633,7 @@ namespace PhotoStudioApp.UI
                 switch (e.ChangeType)
                 {
                     case WatcherChangeTypes.Created:
-                        HandleCreated(categoryName, fileName, subPath, e.FullPath);
+                        HandleCreated(watcher, categoryName, fileName, subPath, e.FullPath);
                         break;
                     case WatcherChangeTypes.Deleted:
                         HandleDeleted(categoryName, fileName, subPath, e.FullPath);
@@ -589,17 +650,23 @@ namespace PhotoStudioApp.UI
         }
 
         /// <summary>A file/folder just appeared. Two things can be going on: (1) it's a brand-new
-        /// sub-folder appearing directly in the studio root - give it its own live watcher right
-        /// away, whatever else this turns out to be; (2) it matches something deleted from a
-        /// DIFFERENT watched folder moments ago (see HandleDeleted/PendingDelete) - if so, this
-        /// is really a move between two separately-watched folders, logged as ONE "Déplacement"
-        /// entry instead of a misleading "Suppression" + "Entrée" pair. Otherwise, it's logged as
-        /// a genuine new arrival.</summary>
-        private void HandleCreated(string categoryName, string fileName, string subPath, string fullPath)
+        /// sub-folder appearing directly inside a NON-recursive watcher (the studio root itself,
+        /// or an "ancestor of a category" folder like "amateur" - see ScanForOrphanWatchers) -
+        /// give it its own live recursive watcher right away, so nothing created inside IT is
+        /// ever missed either, whatever else this turns out to be; (2) it matches something
+        /// deleted from a DIFFERENT watched folder moments ago (see HandleDeleted/PendingDelete) -
+        /// if so, this is really a move between two separately-watched folders, logged as ONE
+        /// "Déplacement" entry instead of a misleading "Suppression" + "Entrée" pair. Otherwise,
+        /// it's logged as a genuine new arrival.</summary>
+        private void HandleCreated(FileSystemWatcher watcher, string categoryName, string fileName, string subPath, string fullPath)
         {
             bool isDirectory = Directory.Exists(fullPath);
 
-            if (isDirectory && categoryName == StudioRootFolderLabel)
+            // A non-recursive watcher, by definition, doesn't automatically extend to a
+            // sub-folder created directly inside it - give that new sub-folder its own live
+            // recursive watcher immediately, whether it's the studio root or an "amateur"-style
+            // orphan parent folder (see ScanForOrphanWatchers for why those are non-recursive).
+            if (isDirectory && watcher != null && !watcher.IncludeSubdirectories)
             {
                 bool alreadyWatched;
                 lock (_watcherLock)

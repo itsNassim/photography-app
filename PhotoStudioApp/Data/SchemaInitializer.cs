@@ -210,8 +210,58 @@ namespace PhotoStudioApp.Data
             // ALTER TABLE, so rebuild the table if that's still the case.
             DropNotNullIfNeeded("Categories", "FolderRelativePath");
 
+            // One-time correction for a spelling mistake in the original default category seed
+            // data below ("amature" instead of "amateur") - fixes any database that already
+            // seeded the old spelling. Runs every startup and is fully idempotent: once the DB
+            // rows and the folder on disk are both already correct, it finds nothing to do.
+            MigrateAmatureToAmateur();
+
             if (isNew)
                 SeedDefaults();
+        }
+
+        /// <summary>Fixes the "amature" -> "amateur" spelling mistake wherever it shows up in an
+        /// existing database: the category Name (e.g. "12 identite (amature)") and
+        /// FolderRelativePath (e.g. "amature\12 identite"), plus renaming the physical "amature"
+        /// folder on disk to "amateur" if it's still there - which brings every photo already
+        /// inside it along for free, since renaming a folder moves its entire contents in one
+        /// filesystem operation. Best-effort on the folder rename (e.g. skipped if a file inside
+        /// is currently open) - the DB rows are corrected regardless, so at worst the user
+        /// renames the folder by hand to match.</summary>
+        private static void MigrateAmatureToAmateur()
+        {
+            var categoryRepo = new CategoryRepository();
+            foreach (var cat in categoryRepo.GetAllCategories(includeInactive: true))
+            {
+                if (cat.Name != null && cat.Name.IndexOf("amature", StringComparison.OrdinalIgnoreCase) >= 0)
+                    categoryRepo.RenameCategory(cat.Id, ReplaceCaseInsensitive(cat.Name, "amature", "amateur"));
+
+                if (cat.FolderRelativePath != null && cat.FolderRelativePath.IndexOf("amature", StringComparison.OrdinalIgnoreCase) >= 0)
+                    categoryRepo.UpdateFolderPath(cat.Id, cat.HasFolder, ReplaceCaseInsensitive(cat.FolderRelativePath, "amature", "amateur"));
+            }
+
+            var settingsRepo = new SettingsRepository();
+            string studioRoot = settingsRepo.Get("StudioRootPath");
+            if (string.IsNullOrWhiteSpace(studioRoot) || !Directory.Exists(studioRoot))
+                return;
+
+            string oldDir = Path.Combine(studioRoot, "amature");
+            string newDir = Path.Combine(studioRoot, "amateur");
+            if (Directory.Exists(oldDir) && !Directory.Exists(newDir))
+            {
+                try { Directory.Move(oldDir, newDir); }
+                catch { /* best-effort - see summary above */ }
+            }
+        }
+
+        /// <summary>Replaces the first case-insensitive match of oldValue in input with newValue
+        /// (there's only ever one "amature" per Name/FolderRelativePath string above, so a single
+        /// replacement is all MigrateAmatureToAmateur needs).</summary>
+        private static string ReplaceCaseInsensitive(string input, string oldValue, string newValue)
+        {
+            int index = input.IndexOf(oldValue, StringComparison.OrdinalIgnoreCase);
+            if (index < 0) return input;
+            return input.Substring(0, index) + newValue + input.Substring(index + oldValue.Length);
         }
 
         /// <summary>Plain struct instead of a C# tuple - named-tuple syntax needs the
@@ -362,8 +412,8 @@ namespace PhotoStudioApp.Data
             categoryRepo.AddCategory("4 identite", true, "4 identite", isCustom: false, initialPrice: 0m);
             categoryRepo.AddCategory("4 visa", true, "4 visa", isCustom: false, initialPrice: 0m);
             categoryRepo.AddCategory("8 visa", true, "8 visa", isCustom: false, initialPrice: 0m);
-            categoryRepo.AddCategory("12 identite (amature)", true, Path.Combine("amature", "12 identite"), isCustom: false, initialPrice: 0m);
-            categoryRepo.AddCategory("16 identite (amature)", true, Path.Combine("amature", "16 identite"), isCustom: false, initialPrice: 0m);
+            categoryRepo.AddCategory("12 identite (amateur)", true, Path.Combine("amateur", "12 identite"), isCustom: false, initialPrice: 0m);
+            categoryRepo.AddCategory("16 identite (amateur)", true, Path.Combine("amateur", "16 identite"), isCustom: false, initialPrice: 0m);
         }
 
         private static void Exec(SQLiteConnection conn, string sql)

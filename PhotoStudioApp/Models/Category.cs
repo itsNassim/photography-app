@@ -5,7 +5,7 @@ namespace PhotoStudioApp.Models
     /// <summary>
     /// A production category (fixed or custom), e.g. "8 identite".
     /// FolderRelativePath is relative to the configured studio root, e.g. "8 identite"
-    /// or "amature\12 identite" for nested folders.
+    /// or "amateur\12 identite" for nested folders.
     ///
     /// Some categories have no physical folder at all (HasFolder = false) - these are
     /// fixed-price "service" items (e.g. printing photos from a customer's phone at a
