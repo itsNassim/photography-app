@@ -5,14 +5,19 @@ using PhotoStudioApp.Models;
 namespace PhotoStudioApp.UI.Dialogs
 {
     /// <summary>Add or edit one manual month-level expense (rent, a subscription, etc. - not
-    /// tied to any single closed day). Deliberately simple, same shape as AddExpenseDialog:
-    /// just a description and an amount.</summary>
+    /// tied to any single closed day). Deliberately simple, same shape as AddExpenseDialog: just
+    /// a description and an amount - which month it belongs to (YearMonth) and when it was added
+    /// (DateAdded) are both set by the caller (HistoryTab), not chosen here: an expense always
+    /// counts toward whichever month row was selected when Ajouter was clicked, and DateAdded is
+    /// simply the actual date it was added on (kept unchanged when later editing description/
+    /// amount, since it's a historical fact, not a "last modified" stamp).</summary>
     public class AddEditMonthlyExpenseDialog : Form
     {
         public MonthlyExpense ResultExpense { get; private set; }
 
         private readonly TextBox _descBox;
         private readonly NumericUpDown _amountBox;
+        private readonly int _existingId;
 
         public AddEditMonthlyExpenseDialog(MonthlyExpense existing = null)
         {
@@ -55,8 +60,6 @@ namespace PhotoStudioApp.UI.Dialogs
 
             _existingId = existing?.Id ?? 0;
         }
-
-        private readonly int _existingId;
 
         private void OkBtn_Click(object sender, EventArgs e)
         {

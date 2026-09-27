@@ -201,6 +201,7 @@ namespace PhotoStudioApp.UI
             var monthExpensePanel = new Panel { Dock = DockStyle.Fill, BackColor = Theme.CardBackground };
             _monthExpenseGrid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true };
             Theme.StyleGrid(_monthExpenseGrid);
+            _monthExpenseGrid.Columns.Add("Date", "Date d'ajout");
             _monthExpenseGrid.Columns.Add("Description", "Description");
             _monthExpenseGrid.Columns.Add("Amount", "Montant");
             monthExpensePanel.Controls.Add(_monthExpenseGrid);
@@ -337,7 +338,7 @@ namespace PhotoStudioApp.UI
 
             foreach (var expense in _monthlyExpenseRepo.GetForMonth(yearMonth))
             {
-                int idx = _monthExpenseGrid.Rows.Add(expense.Description, expense.Amount.ToString("0.00"));
+                int idx = _monthExpenseGrid.Rows.Add(expense.DateAdded.ToString("dd/MM/yyyy"), expense.Description, expense.Amount.ToString("0.00"));
                 _monthExpenseGrid.Rows[idx].Tag = expense.Id;
             }
         }
@@ -430,7 +431,11 @@ namespace PhotoStudioApp.UI
             {
                 if (dlg.ShowDialog(this) == DialogResult.OK)
                 {
+                    // Counts toward exactly the month row that was selected when Ajouter was
+                    // clicked - never any other month. DateAdded is the real date this add
+                    // happened, recorded once and never touched again by later edits.
                     dlg.ResultExpense.YearMonth = yearMonth;
+                    dlg.ResultExpense.DateAdded = DateTime.Now.Date;
                     _monthlyExpenseRepo.Insert(dlg.ResultExpense);
                     LoadMonthSummaries();
                 }
@@ -450,7 +455,10 @@ namespace PhotoStudioApp.UI
             {
                 if (dlg.ShowDialog(this) == DialogResult.OK)
                 {
+                    // Which month and when it was originally added never change on edit - only
+                    // the description/amount the dialog actually let the user touch do.
                     dlg.ResultExpense.YearMonth = yearMonth;
+                    dlg.ResultExpense.DateAdded = existing.DateAdded;
                     _monthlyExpenseRepo.Update(dlg.ResultExpense);
                     LoadMonthSummaries();
                 }

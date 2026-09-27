@@ -1,24 +1,27 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data.SQLite;
+using System.Globalization;
 using PhotoStudioApp.Models;
 
 namespace PhotoStudioApp.Data
 {
     /// <summary>CRUD for MonthlyExpense - manual, month-level expenses (rent, subscriptions,
     /// etc.) not tied to any single closed day. Powers the "Résumé mensuel" sub-tab's Ajouter/
-    /// Modifier/Supprimer buttons.</summary>
+    /// Modifier/Supprimer buttons. YearMonth and DateAdded are both set by the caller
+    /// (HistoryTab) - see AddEditMonthlyExpenseDialog's own summary for why.</summary>
     public class MonthlyExpenseRepository
     {
         public int Insert(MonthlyExpense expense)
         {
             using (var conn = Db.OpenConnection())
             using (var cmd = new SQLiteCommand(@"
-                INSERT INTO MonthlyExpenses (YearMonth, Description, Amount)
-                VALUES (@ym, @desc, @amt);
+                INSERT INTO MonthlyExpenses (YearMonth, DateAdded, Description, Amount)
+                VALUES (@ym, @date, @desc, @amt);
                 SELECT last_insert_rowid();", conn))
             {
                 cmd.Parameters.AddWithValue("@ym", expense.YearMonth);
+                cmd.Parameters.AddWithValue("@date", expense.DateAdded.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
                 cmd.Parameters.AddWithValue("@desc", expense.Description);
                 cmd.Parameters.AddWithValue("@amt", expense.Amount);
                 return Convert.ToInt32((long)cmd.ExecuteScalar());
@@ -53,22 +56,14 @@ namespace PhotoStudioApp.Data
             var list = new List<MonthlyExpense>();
             using (var conn = Db.OpenConnection())
             using (var cmd = new SQLiteCommand(@"
-                SELECT Id, YearMonth, Description, Amount FROM MonthlyExpenses
-                WHERE YearMonth=@ym ORDER BY Id ASC;", conn))
+                SELECT Id, YearMonth, DateAdded, Description, Amount FROM MonthlyExpenses
+                WHERE YearMonth=@ym ORDER BY DateAdded ASC, Id ASC;", conn))
             {
                 cmd.Parameters.AddWithValue("@ym", yearMonth);
                 using (var r = cmd.ExecuteReader())
                 {
                     while (r.Read())
-                    {
-                        list.Add(new MonthlyExpense
-                        {
-                            Id = r.GetInt32(0),
-                            YearMonth = r.GetString(1),
-                            Description = r.GetString(2),
-                            Amount = Convert.ToDecimal(r.GetDouble(3))
-                        });
-                    }
+                        list.Add(ReadExpense(r));
                 }
             }
             return list;
@@ -100,6 +95,22 @@ namespace PhotoStudioApp.Data
                 cmd.Parameters.AddWithValue("@ym", yearMonth);
                 cmd.ExecuteNonQuery();
             }
+        }
+
+        private static MonthlyExpense ReadExpense(SQLiteDataReader r)
+        {
+            DateTime dateAdded;
+            if (!DateTime.TryParseExact(r.GetString(2), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out dateAdded))
+                dateAdded = DateTime.Today;
+
+            return new MonthlyExpense
+            {
+                Id = r.GetInt32(0),
+                YearMonth = r.GetString(1),
+                DateAdded = dateAdded,
+                Description = r.GetString(3),
+                Amount = Convert.ToDecimal(r.GetDouble(4))
+            };
         }
     }
 }

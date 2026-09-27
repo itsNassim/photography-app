@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Windows.Forms;
 using PhotoStudioApp.Data;
 using PhotoStudioApp.Services;
@@ -36,10 +37,35 @@ namespace PhotoStudioApp.UI
         // single UI refresh a few hundred ms later, rather than refreshing 40 times in a row.
         private readonly List<FileSystemWatcher> _folderWatchers = new List<FileSystemWatcher>();
         private readonly Dictionary<FileSystemWatcher, string> _watcherCategoryNames = new Dictionary<FileSystemWatcher, string>();
+        /// <summary>Guards every read/write of _folderWatchers, _watcherCategoryNames and
+        /// _pendingDeletes below - FileSystemWatcher events arrive on background threads (one
+        /// per watcher, potentially concurrently), and a dynamically-discovered new sub-folder
+        /// (see TryAddWatcher) can mutate these same collections from within an event callback
+        /// while SetupFolderWatchers might be rebuilding them from the UI thread.</summary>
+        private readonly object _watcherLock = new object();
         /// <summary>Category label used in the studio action log for events that happen directly
         /// in the studio root folder itself (see SetupFolderWatchers' extra root-level watcher),
         /// rather than inside any one category's own folder.</summary>
         private const string StudioRootFolderLabel = "(dossier racine du studio)";
+
+        /// <summary>A file (or folder) deleted from one watched location within the last
+        /// MoveCorrelationWindow, held back from being logged as a plain deletion in case a
+        /// matching Created event (same name) shows up in a DIFFERENT watched folder shortly
+        /// after - which would mean this was really a move between two folders, each with their
+        /// own separate FileSystemWatcher (a rename/move within a SINGLE watcher's tree already
+        /// arrives as one Renamed event with both paths, so doesn't need this correlation - see
+        /// LogStudioFileEvent's Renamed handling instead). See HandleCreated/HandleDeleted/
+        /// FlushPendingDelete.</summary>
+        private class PendingDelete
+        {
+            public string CategoryName;
+            public string SubPath;
+            public bool IsDirectory;
+            public System.Threading.Timer FlushTimer;
+        }
+        private readonly Dictionary<string, PendingDelete> _pendingDeletes = new Dictionary<string, PendingDelete>(StringComparer.OrdinalIgnoreCase);
+        private static readonly TimeSpan MoveCorrelationWindow = TimeSpan.FromSeconds(3);
+
         private Timer _watchDebounce;
 
         public HomeTab()
@@ -419,13 +445,17 @@ namespace PhotoStudioApp.UI
         /// path might have changed (see MainForm wiring).</summary>
         public void SetupFolderWatchers()
         {
-            foreach (var w in _folderWatchers)
+            lock (_watcherLock)
             {
-                w.EnableRaisingEvents = false;
-                w.Dispose();
+                foreach (var w in _folderWatchers)
+                {
+                    w.EnableRaisingEvents = false;
+                    w.Dispose();
+                }
+                _folderWatchers.Clear();
+                _watcherCategoryNames.Clear();
             }
-            _folderWatchers.Clear();
-            _watcherCategoryNames.Clear();
+            ClearPendingDeletes();
 
             var settings = _settingsRepo.LoadAll();
             if (string.IsNullOrWhiteSpace(settings.StudioRootPath))
@@ -440,57 +470,56 @@ namespace PhotoStudioApp.UI
                 if (!Directory.Exists(abs))
                     continue;
 
-                try
-                {
-                    var watcher = new FileSystemWatcher(abs)
-                    {
-                        NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.DirectoryName,
-                        // Recursive - a category folder's own subfolders (a photographer
-                        // organizing shots into a client-name subfolder, for instance) need to be
-                        // watched and logged too, not just the category folder's own top level.
-                        IncludeSubdirectories = true
-                    };
-                    watcher.Created += FolderWatcher_Changed;
-                    watcher.Deleted += FolderWatcher_Changed;
-                    watcher.Renamed += FolderWatcher_Changed;
-                    watcher.Changed += FolderWatcher_Changed;
-                    watcher.EnableRaisingEvents = true;
-                    _folderWatchers.Add(watcher);
-                    _watcherCategoryNames[watcher] = cat.Name;
-                }
-                catch
-                {
-                    // Best-effort - if a watcher can't be created for this folder (e.g. a
-                    // network path that doesn't support it), the 15s safety-net poll still
-                    // catches it eventually.
-                }
+                // Recursive - a category folder's own subfolders (a photographer organizing
+                // shots into a client-name subfolder, for instance) need to be watched and
+                // logged too, not just the category folder's own top level.
+                TryAddWatcher(abs, cat.Name, recursive: true);
             }
 
             if (Directory.Exists(settings.StudioRootPath))
             {
-                try
+                // NOT recursive - every category folder already has its own recursive watcher
+                // above, so this one only needs to see entries directly inside the studio root
+                // itself; making it recursive too would log every category's activity a second
+                // time. A brand-new sub-folder that appears directly in the root (not yet a
+                // registered category) gets its OWN dynamic recursive watcher the instant it's
+                // created instead - see HandleCreated - so nothing inside it is ever missed
+                // while waiting for the next full rebuild of this method.
+                TryAddWatcher(settings.StudioRootPath, StudioRootFolderLabel, recursive: false);
+            }
+        }
+
+        /// <summary>Creates, wires up, starts and registers one FileSystemWatcher for path,
+        /// labelled label in the studio action log - the single place a watcher gets created,
+        /// used for every category folder, the studio root itself (both from
+        /// SetupFolderWatchers), and any brand-new sub-folder discovered directly in the root
+        /// after startup (see HandleCreated), so all three always behave identically.
+        /// Best-effort: swallows failures (e.g. a network path that doesn't support watching)
+        /// since the 15s safety-net poll still catches those folders eventually.</summary>
+        private void TryAddWatcher(string path, string label, bool recursive)
+        {
+            try
+            {
+                var watcher = new FileSystemWatcher(path)
                 {
-                    var rootWatcher = new FileSystemWatcher(settings.StudioRootPath)
-                    {
-                        NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.DirectoryName,
-                        // NOT recursive - every category folder already has its own recursive
-                        // watcher above, so this one only needs to see entries directly inside the
-                        // studio root itself; making it recursive too would log every category's
-                        // activity a second time.
-                        IncludeSubdirectories = false
-                    };
-                    rootWatcher.Created += FolderWatcher_Changed;
-                    rootWatcher.Deleted += FolderWatcher_Changed;
-                    rootWatcher.Renamed += FolderWatcher_Changed;
-                    rootWatcher.Changed += FolderWatcher_Changed;
-                    rootWatcher.EnableRaisingEvents = true;
-                    _folderWatchers.Add(rootWatcher);
-                    _watcherCategoryNames[rootWatcher] = StudioRootFolderLabel;
-                }
-                catch
+                    NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.DirectoryName,
+                    IncludeSubdirectories = recursive
+                };
+                watcher.Created += FolderWatcher_Changed;
+                watcher.Deleted += FolderWatcher_Changed;
+                watcher.Renamed += FolderWatcher_Changed;
+                watcher.Changed += FolderWatcher_Changed;
+                watcher.EnableRaisingEvents = true;
+
+                lock (_watcherLock)
                 {
-                    // Best-effort, same as above.
+                    _folderWatchers.Add(watcher);
+                    _watcherCategoryNames[watcher] = label;
                 }
+            }
+            catch
+            {
+                // Best-effort - see summary above.
             }
         }
 
@@ -516,15 +545,15 @@ namespace PhotoStudioApp.UI
         }
 
         /// <summary>Records a file (or subfolder) entering/leaving/being renamed anywhere inside
-        /// a category folder - including inside subfolders someone creates within it, now that
-        /// watchers are recursive (see SetupFolderWatchers) - into the studio action log (Archive
-        /// tab). "Changed" (a plain write, e.g. mid-copy) is not logged - too noisy and not a
-        /// meaningful action on its own; only a file/folder's arrival, removal, or rename is.
-        /// Skipped entirely while StudioLogSuppressor is active, i.e. during the app's own
-        /// routine close-day purge/archive - those are logged explicitly and more informatively
-        /// by FolderCountService instead (see its comments), so logging them again here would
-        /// both duplicate and mislabel them (a photo safely moved to the archive would otherwise
-        /// show up here as a plain "Suppression").</summary>
+        /// a category folder or the studio root - including inside subfolders someone creates
+        /// within it, now that watchers are recursive (see SetupFolderWatchers) - into the
+        /// studio action log (Archive tab). "Changed" (a plain write, e.g. mid-copy) is not
+        /// logged - too noisy and not a meaningful action on its own; only a file/folder's
+        /// arrival, removal, rename, or move is. Skipped entirely while StudioLogSuppressor is
+        /// active, i.e. during the app's own routine close-day purge/archive - those are logged
+        /// explicitly and more informatively by FolderCountService instead (see its comments),
+        /// so logging them again here would both duplicate and mislabel them (a photo safely
+        /// moved to the archive would otherwise show up here as a plain "Suppression").</summary>
         private void LogStudioFileEvent(object sender, FileSystemEventArgs e)
         {
             try
@@ -533,58 +562,185 @@ namespace PhotoStudioApp.UI
                 if (StudioLogSuppressor.IsSuppressed) return;
 
                 var watcher = sender as FileSystemWatcher;
-                string categoryName = (watcher != null && _watcherCategoryNames.TryGetValue(watcher, out var name)) ? name : null;
+                string categoryName;
+                lock (_watcherLock)
+                    categoryName = (watcher != null && _watcherCategoryNames.TryGetValue(watcher, out var name)) ? name : null;
+
                 string fileName = Path.GetFileName(e.FullPath);
+                string subPath = ComputeSubPath(watcher, e.FullPath);
 
-                // With recursive watching, an event can come from several levels deep inside the
-                // category folder - the sub-folder path (relative to the category root) is worth
-                // recording so a log entry for "photo.jpg" says which client/sub-folder it was in.
-                string subPath = null;
-                if (watcher != null)
-                {
-                    string relativeDir = Path.GetDirectoryName(GetRelativePath(watcher.Path, e.FullPath));
-                    if (!string.IsNullOrEmpty(relativeDir))
-                        subPath = relativeDir;
-                }
-
-                // Created/Deleted don't tell us on their own whether the entry was a file or a
-                // sub-folder. For Created the entry still exists, so Directory.Exists settles it
-                // directly. For Deleted it no longer exists to check - a missing extension is
-                // used as a best-effort hint (a real photo file always has one; a folder someone
-                // named "IMG_2026" without a dot would be the rare miss here).
-                bool isDirectory = e.ChangeType == WatcherChangeTypes.Created
-                    ? Directory.Exists(e.FullPath)
-                    : string.IsNullOrEmpty(Path.GetExtension(e.FullPath));
-
-                string action;
-                string details = subPath == null ? null : $"Dans le sous-dossier : {subPath}";
                 switch (e.ChangeType)
                 {
                     case WatcherChangeTypes.Created:
-                        action = isDirectory ? "Création de sous-dossier" : "Entrée (nouveau fichier)";
+                        HandleCreated(categoryName, fileName, subPath, e.FullPath);
                         break;
                     case WatcherChangeTypes.Deleted:
-                        action = isDirectory ? "Suppression de sous-dossier" : "Suppression";
+                        HandleDeleted(categoryName, fileName, subPath, e.FullPath);
                         break;
                     case WatcherChangeTypes.Renamed:
-                        action = isDirectory ? "Renommage de sous-dossier" : "Renommage";
-                        var renamed = e as RenamedEventArgs;
-                        if (renamed != null)
-                        {
-                            string oldName = Path.GetFileName(renamed.OldFullPath);
-                            details = details == null ? $"Ancien nom : {oldName}" : $"{details} - Ancien nom : {oldName}";
-                        }
+                        HandleRenamed(watcher, categoryName, fileName, subPath, e as RenamedEventArgs);
                         break;
-                    default:
-                        return;
                 }
-
-                StudioActionLogService.Record(fileName, action, categoryName, details);
             }
             catch
             {
                 // Logging must never break the live folder-watching feature.
             }
+        }
+
+        /// <summary>A file/folder just appeared. Two things can be going on: (1) it's a brand-new
+        /// sub-folder appearing directly in the studio root - give it its own live watcher right
+        /// away, whatever else this turns out to be; (2) it matches something deleted from a
+        /// DIFFERENT watched folder moments ago (see HandleDeleted/PendingDelete) - if so, this
+        /// is really a move between two separately-watched folders, logged as ONE "Déplacement"
+        /// entry instead of a misleading "Suppression" + "Entrée" pair. Otherwise, it's logged as
+        /// a genuine new arrival.</summary>
+        private void HandleCreated(string categoryName, string fileName, string subPath, string fullPath)
+        {
+            bool isDirectory = Directory.Exists(fullPath);
+
+            if (isDirectory && categoryName == StudioRootFolderLabel)
+            {
+                bool alreadyWatched;
+                lock (_watcherLock)
+                    alreadyWatched = _folderWatchers.Any(w => string.Equals(w.Path, fullPath, StringComparison.OrdinalIgnoreCase));
+                if (!alreadyWatched)
+                    TryAddWatcher(fullPath, fileName, recursive: true);
+            }
+
+            var pending = TakePendingDelete(fileName);
+            if (pending != null)
+            {
+                string fromLabel = pending.SubPath == null ? pending.CategoryName : $"{pending.CategoryName} / {pending.SubPath}";
+                string toLabel = subPath == null ? categoryName : $"{categoryName} / {subPath}";
+                string moveAction = isDirectory ? "Déplacement de sous-dossier" : "Déplacement";
+                StudioActionLogService.Record(fileName, moveAction, categoryName, $"De {fromLabel} vers {toLabel}");
+                return;
+            }
+
+            string action = isDirectory ? "Création de sous-dossier" : "Entrée (nouveau fichier)";
+            string details = subPath == null ? null : $"Dans le sous-dossier : {subPath}";
+            StudioActionLogService.Record(fileName, action, categoryName, details);
+        }
+
+        /// <summary>A file/folder just disappeared. Rather than logging a deletion immediately,
+        /// this is held for MoveCorrelationWindow in case a matching Created event (same file
+        /// name) shows up in a different watched folder shortly after - see HandleCreated. If
+        /// nothing matches in time, FlushPendingDelete logs it as a genuine deletion.</summary>
+        private void HandleDeleted(string categoryName, string fileName, string subPath, string fullPath)
+        {
+            // Can't check Directory.Exists any more - it's already gone. A missing extension is
+            // a best-effort hint that this was a folder, not a file (a real photo file always
+            // has one; a folder named e.g. "IMG_2026" without a dot would be the rare miss here).
+            bool isDirectory = string.IsNullOrEmpty(Path.GetExtension(fullPath));
+
+            var pending = new PendingDelete { CategoryName = categoryName, SubPath = subPath, IsDirectory = isDirectory };
+            pending.FlushTimer = new System.Threading.Timer(
+                _ => FlushPendingDelete(fileName), null, MoveCorrelationWindow, System.Threading.Timeout.InfiniteTimeSpan);
+
+            lock (_watcherLock)
+            {
+                if (_pendingDeletes.TryGetValue(fileName, out var existing))
+                    existing.FlushTimer.Dispose();
+                _pendingDeletes[fileName] = pending;
+            }
+        }
+
+        /// <summary>A rename/move WITHIN a single watcher's own tree (unlike HandleCreated's
+        /// cross-watcher correlation, this arrives as one Renamed event with both the old and new
+        /// full paths already known, since both are under the same watched root). Distinguishes a
+        /// genuine same-folder rename from a move to a different sub-folder by comparing the two
+        /// paths' containing folders.</summary>
+        private void HandleRenamed(FileSystemWatcher watcher, string categoryName, string fileName, string subPath, RenamedEventArgs renamed)
+        {
+            if (renamed == null) return;
+
+            bool isDirectory = Directory.Exists(renamed.FullPath);
+            string oldName = Path.GetFileName(renamed.OldFullPath);
+            string oldSubPath = ComputeSubPath(watcher, renamed.OldFullPath);
+            bool sameName = string.Equals(oldName, fileName, StringComparison.OrdinalIgnoreCase);
+            bool movedFolder = !string.Equals(oldSubPath ?? "", subPath ?? "", StringComparison.OrdinalIgnoreCase);
+
+            string action;
+            string details;
+            if (movedFolder)
+            {
+                action = isDirectory ? "Déplacement de sous-dossier" : "Déplacement";
+                string fromLabel = oldSubPath ?? "(racine de la catégorie)";
+                string toLabel = subPath ?? "(racine de la catégorie)";
+                details = $"De {fromLabel} vers {toLabel}" + (sameName ? "" : $" - Ancien nom : {oldName}");
+            }
+            else
+            {
+                action = isDirectory ? "Renommage de sous-dossier" : "Renommage";
+                details = subPath == null ? $"Ancien nom : {oldName}" : $"Dans le sous-dossier : {subPath} - Ancien nom : {oldName}";
+            }
+
+            StudioActionLogService.Record(fileName, action, categoryName, details);
+        }
+
+        /// <summary>Removes and returns a pending deletion for fileName if one is still waiting
+        /// (i.e. a matching Created event arrived within MoveCorrelationWindow), disposing its
+        /// flush timer so it never fires. Returns null if there's no match.</summary>
+        private PendingDelete TakePendingDelete(string fileName)
+        {
+            lock (_watcherLock)
+            {
+                if (_pendingDeletes.TryGetValue(fileName, out var pending))
+                {
+                    _pendingDeletes.Remove(fileName);
+                    pending.FlushTimer.Dispose();
+                    return pending;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>Called once MoveCorrelationWindow has passed with no matching Created event -
+        /// logs the held-back deletion as a genuine "Suppression", since it turned out not to be
+        /// half of a move after all.</summary>
+        private void FlushPendingDelete(string fileName)
+        {
+            PendingDelete pending;
+            lock (_watcherLock)
+            {
+                if (!_pendingDeletes.TryGetValue(fileName, out pending)) return;
+                _pendingDeletes.Remove(fileName);
+            }
+
+            try
+            {
+                pending.FlushTimer.Dispose();
+                string action = pending.IsDirectory ? "Suppression de sous-dossier" : "Suppression";
+                string details = pending.SubPath == null ? null : $"Dans le sous-dossier : {pending.SubPath}";
+                StudioActionLogService.Record(fileName, action, pending.CategoryName, details);
+            }
+            catch
+            {
+                // Logging must never break the live folder-watching feature.
+            }
+        }
+
+        private void ClearPendingDeletes()
+        {
+            lock (_watcherLock)
+            {
+                foreach (var pending in _pendingDeletes.Values)
+                    pending.FlushTimer.Dispose();
+                _pendingDeletes.Clear();
+            }
+        }
+
+        /// <summary>Path of fullPath relative to watcher's own root (e.g.
+        /// "C:\Studio\Portrait\ClientX\a.jpg" relative to a watcher rooted at "C:\Studio\Portrait"
+        /// becomes the containing folder "ClientX"), or null if fullPath sits directly at the
+        /// watcher's own root with no sub-folder. Null watcher (shouldn't normally happen) also
+        /// yields null.</summary>
+        private static string ComputeSubPath(FileSystemWatcher watcher, string fullPath)
+        {
+            if (watcher == null) return null;
+            string relativeDir = Path.GetDirectoryName(GetRelativePath(watcher.Path, fullPath));
+            return string.IsNullOrEmpty(relativeDir) ? null : relativeDir;
         }
 
         /// <summary>.NET Framework 4.6 has no built-in Path.GetRelativePath (that's a .NET Core /
@@ -612,12 +768,18 @@ namespace PhotoStudioApp.UI
         {
             if (disposing)
             {
-                foreach (var w in _folderWatchers)
+                lock (_watcherLock)
                 {
-                    w.EnableRaisingEvents = false;
-                    w.Dispose();
+                    foreach (var w in _folderWatchers)
+                    {
+                        w.EnableRaisingEvents = false;
+                        w.Dispose();
+                    }
+                    _folderWatchers.Clear();
+                    foreach (var pending in _pendingDeletes.Values)
+                        pending.FlushTimer.Dispose();
+                    _pendingDeletes.Clear();
                 }
-                _folderWatchers.Clear();
                 _watchDebounce?.Dispose();
                 _autoRefreshTimer?.Dispose();
             }

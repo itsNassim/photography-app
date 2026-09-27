@@ -2,24 +2,28 @@
 using System.Collections.Generic;
 using System.Text;
 using System.Windows.Forms;
+using PhotoStudioApp.Data;
 using PhotoStudioApp.Models;
 using PhotoStudioApp.Services;
 
 namespace PhotoStudioApp.UI.Dialogs
 {
     /// <summary>Shows the printable "Résumé mensuel" (month summary) report: total revenue for
-    /// the month plus the day-by-day breakdown that makes it up. Mirrors BreakdownReportForm's
+    /// the month, the day-by-day breakdown that makes it up, and the manual month-level expenses
+    /// (rent, subscriptions, etc.) entered against this month. Mirrors BreakdownReportForm's
     /// layout/behavior (view/print/export) for the daily report.</summary>
     public class MonthSummaryReportForm : Form
     {
         private readonly MonthSummary _summary;
         private readonly List<DailyClose> _days;
+        private readonly List<MonthlyExpense> _monthExpenses;
         private readonly ReportPrintService _printService = new ReportPrintService();
 
         public MonthSummaryReportForm(MonthSummary summary, List<DailyClose> days)
         {
             _summary = summary;
             _days = days;
+            _monthExpenses = new MonthlyExpenseRepository().GetForMonth(summary.YearMonth);
             Text = $"Rapport mensuel - {summary.MonthLabel}";
             Width = 560;
             Height = 620;
@@ -87,6 +91,14 @@ namespace PhotoStudioApp.UI.Dialogs
             foreach (var day in _days)
                 sb.AppendLine($"{day.CloseDate,-14} revenu {day.GrandTotal,9:0.00}  dépenses -{day.TotalExpenses,8:0.00}  net {day.NetTotal,9:0.00}");
 
+            if (_monthExpenses.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("Dépenses du mois (loyer, abonnements, etc.) :");
+                foreach (var me in _monthExpenses)
+                    sb.AppendLine($"  {me.DateAdded:dd/MM/yyyy}  {me.Description,-28} -{me.Amount,9:0.00}");
+            }
+
             sb.AppendLine(new string('-', 46));
             sb.AppendLine($"TOTAL DU MOIS (revenu) : {_summary.TotalRevenue:0.00}");
             sb.AppendLine($"Total des dépenses du mois : -{_summary.TotalExpenses:0.00}");
@@ -98,7 +110,7 @@ namespace PhotoStudioApp.UI.Dialogs
         {
             try
             {
-                _printService.ShowPrintDialogAndPrintMonth(_summary, _days);
+                _printService.ShowPrintDialogAndPrintMonth(_summary, _days, _monthExpenses);
             }
             catch (Exception ex)
             {
@@ -118,7 +130,7 @@ namespace PhotoStudioApp.UI.Dialogs
 
                 try
                 {
-                    _printService.ExportMonthToPdf(_summary, _days, dlg.FileName);
+                    _printService.ExportMonthToPdf(_summary, _days, _monthExpenses, dlg.FileName);
                     MessageBox.Show("PDF exporté avec succès.", "Termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception ex)

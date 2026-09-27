@@ -162,6 +162,16 @@ namespace PhotoStudioApp.Data
             AddColumnIfMissing("DailyCloses", "TotalExpenses", "REAL NOT NULL DEFAULT 0");
             AddColumnIfMissing("DailyCloses", "NetTotal", "REAL NOT NULL DEFAULT 0");
             AddColumnIfMissing("PendingBalances", "TotalAmount", "REAL NOT NULL DEFAULT 0");
+            AddColumnIfMissing("MonthlyExpenses", "DateAdded", "TEXT NOT NULL DEFAULT ''");
+
+            // Backfill for MonthlyExpenses rows that existed before DateAdded was added (they
+            // get '' from the column's DEFAULT above) - the exact date they were added isn't
+            // recoverable, so the 1st of their already-known YearMonth is the best available
+            // approximation. Runs every startup, safe/idempotent: only touches rows still at ''.
+            using (var conn = Db.OpenConnection())
+            using (var cmd = new SQLiteCommand(
+                "UPDATE MonthlyExpenses SET DateAdded = YearMonth || '-01' WHERE DateAdded = '';", conn))
+                cmd.ExecuteNonQuery();
 
             // Self-healing backfill (same pattern/lesson as the NetTotal fix above - see
             // areas/photostudio-app.md bug #13): a balance created before TotalAmount existed

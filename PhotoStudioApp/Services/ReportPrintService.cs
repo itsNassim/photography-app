@@ -15,6 +15,7 @@ namespace PhotoStudioApp.Services
         private DailyClose _close;
         private MonthSummary _monthSummary;
         private List<DailyClose> _monthDays;
+        private List<MonthlyExpense> _monthExpenses;
         private readonly Font _titleFont = new Font("Consolas", 13, FontStyle.Bold);
         private readonly Font _bodyFont = new Font("Consolas", 10);
         private readonly Font _totalFont = new Font("Consolas", 12, FontStyle.Bold);
@@ -24,6 +25,7 @@ namespace PhotoStudioApp.Services
             _close = close;
             _monthSummary = null;
             _monthDays = null;
+            _monthExpenses = null;
             var doc = new PrintDocument();
             doc.DocumentName = $"Rapport du jour - {close.CloseDate}";
             doc.PrintPage += Doc_PrintPage;
@@ -44,11 +46,14 @@ namespace PhotoStudioApp.Services
         }
 
         /// <summary>Builds a printable document for a month's summary - total revenue plus the
-        /// day-by-day breakdown that makes up that total.</summary>
-        public PrintDocument BuildMonthDocument(MonthSummary summary, List<DailyClose> daysInMonth)
+        /// day-by-day breakdown that makes up that total, and the manual month-level expenses
+        /// (rent, subscriptions, etc. - see MonthlyExpenseRepository) entered against this
+        /// month.</summary>
+        public PrintDocument BuildMonthDocument(MonthSummary summary, List<DailyClose> daysInMonth, List<MonthlyExpense> monthlyExpenses)
         {
             _monthSummary = summary;
             _monthDays = daysInMonth;
+            _monthExpenses = monthlyExpenses;
             _close = null;
             var doc = new PrintDocument();
             doc.DocumentName = $"Rapport mensuel - {summary.MonthLabel}";
@@ -57,9 +62,9 @@ namespace PhotoStudioApp.Services
         }
 
         /// <summary>Shows the standard Windows print dialog then prints the month summary if confirmed.</summary>
-        public bool ShowPrintDialogAndPrintMonth(MonthSummary summary, List<DailyClose> daysInMonth)
+        public bool ShowPrintDialogAndPrintMonth(MonthSummary summary, List<DailyClose> daysInMonth, List<MonthlyExpense> monthlyExpenses)
         {
-            var doc = BuildMonthDocument(summary, daysInMonth);
+            var doc = BuildMonthDocument(summary, daysInMonth, monthlyExpenses);
             using (var dlg = new PrintDialog { Document = doc, AllowSomePages = false, AllowSelection = false })
             {
                 if (dlg.ShowDialog() != DialogResult.OK)
@@ -70,10 +75,11 @@ namespace PhotoStudioApp.Services
         }
 
         /// <summary>Same PDF-export path as ExportToPdf, but for a month summary.</summary>
-        public void ExportMonthToPdf(MonthSummary summary, List<DailyClose> daysInMonth, string outputPdfPath)
+        public void ExportMonthToPdf(MonthSummary summary, List<DailyClose> daysInMonth, List<MonthlyExpense> monthlyExpenses, string outputPdfPath)
         {
             _monthSummary = summary;
             _monthDays = daysInMonth;
+            _monthExpenses = monthlyExpenses;
             _close = null;
             const string pdfPrinterName = "Microsoft Print to PDF";
 
@@ -224,6 +230,19 @@ namespace PhotoStudioApp.Services
                 string line = $"{day.CloseDate,-16} revenu {day.GrandTotal,10:0.00}   dépenses -{day.TotalExpenses,8:0.00}   net {day.NetTotal,10:0.00}";
                 g.DrawString(line, _bodyFont, Brushes.Black, x, y);
                 y += lineHeight;
+            }
+
+            if (_monthExpenses != null && _monthExpenses.Count > 0)
+            {
+                y += 6;
+                g.DrawString("Dépenses du mois (loyer, abonnements, etc.) :", _bodyFont, Brushes.Black, x, y);
+                y += lineHeight;
+                foreach (var me in _monthExpenses)
+                {
+                    string line = $"  {me.DateAdded:dd/MM/yyyy}  {me.Description,-28} = -{me.Amount,9:0.00}";
+                    g.DrawString(line, _bodyFont, Brushes.Black, x, y);
+                    y += lineHeight;
+                }
             }
 
             y += 10;

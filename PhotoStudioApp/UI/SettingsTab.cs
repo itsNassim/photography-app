@@ -31,7 +31,8 @@ namespace PhotoStudioApp.UI
         private DateTimePicker _currentWorkDatePicker;
         private CheckBox _workerArchiveArmedCheck;
         private Button _workerArchiveBtn;
-        private Label _workerArchiveDisabledLabel;
+        private Label _workerArchiveCaptionLabel;
+        private TableLayoutPanel _workerArchivePanel;
 
         /// <summary>Plain struct instead of a C# tuple - named-tuple syntax needs the
         /// ValueTuple types, which only became part of mscorlib in .NET Framework 4.7+; on
@@ -132,7 +133,7 @@ namespace PhotoStudioApp.UI
             card.Controls.Add(_closedDaysList, 1, row);
             row++;
 
-            AddLabel(card, "Prefixes de fichiers a supprimer\na la clôture (ex. \"re\") :", row);
+            AddLabel(card, "Prefixes de fichiers a nettoyer\napres la clôture (ex. \"re\") :", row);
             var prefixPanel = new TableLayoutPanel { ColumnCount = 1, AutoSize = true };
             prefixPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             prefixPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -153,7 +154,7 @@ namespace PhotoStudioApp.UI
             card.Controls.Add(prefixPanel, 1, row);
             card.Controls.Add(new Label
             {
-                Text = "Tout fichier dont le nom commence par l'un\nde ces prefixes est envoye a la corbeille\navant le comptage, dans chaque dossier de\ncatégorie.",
+                Text = "Tout fichier dont le nom commence par l'un de\nces prefixes est D'ABORD COMPTE ET FACTURE\nnormalement avec les autres photos de la\ncatégorie, PUIS envoyé a la corbeille juste apres\n(nettoyage du dossier - ca ne réduit jamais le\ntotal facture).",
                 AutoSize = true, ForeColor = System.Drawing.Color.Gray, Margin = new Padding(3, 8, 0, 0)
             }, 2, row);
             row++;
@@ -178,13 +179,8 @@ namespace PhotoStudioApp.UI
             }, 2, row);
             row++;
 
-            AddLabel(card, "Archiver :", row);
-            var workerArchivePanel = new TableLayoutPanel { AutoSize = true, ColumnCount = 1 };
-            _workerArchiveDisabledLabel = new Label
-            {
-                Text = "Fonctionnalité désactivée - activez-la dans Historique > Paramètres admin.",
-                AutoSize = true, ForeColor = System.Drawing.Color.Gray, Margin = new Padding(0, 8, 0, 0)
-            };
+            _workerArchiveCaptionLabel = AddLabel(card, "Archiver :", row);
+            _workerArchivePanel = new TableLayoutPanel { AutoSize = true, ColumnCount = 1 };
             var armRow = new FlowLayoutPanel { AutoSize = true };
             _workerArchiveArmedCheck = new CheckBox { Text = "Activer le bouton pour une utilisation", AutoSize = true, Margin = new Padding(0, 6, 0, 0) };
             _workerArchiveArmedCheck.Click += WorkerArchiveArmedCheck_Click;
@@ -193,10 +189,9 @@ namespace PhotoStudioApp.UI
             _workerArchiveBtn.Width = 260;
             _workerArchiveBtn.Margin = new Padding(0, 4, 0, 0);
             _workerArchiveBtn.Click += WorkerArchiveBtn_Click;
-            workerArchivePanel.Controls.Add(_workerArchiveDisabledLabel);
-            workerArchivePanel.Controls.Add(armRow);
-            workerArchivePanel.Controls.Add(_workerArchiveBtn);
-            card.Controls.Add(workerArchivePanel, 1, row);
+            _workerArchivePanel.Controls.Add(armRow);
+            _workerArchivePanel.Controls.Add(_workerArchiveBtn);
+            card.Controls.Add(_workerArchivePanel, 1, row);
             row++;
 
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -213,9 +208,15 @@ namespace PhotoStudioApp.UI
             Controls.Add(scrollPanel);
         }
 
-        private void AddLabel(TableLayoutPanel panel, string text, int row)
+        /// <summary>Adds a bold caption label at column 0 of the given row and returns it, so
+        /// callers that need to toggle a whole labeled row's visibility (see the worker-archive
+        /// section, entirely hidden - caption included - when the feature is turned off) have a
+        /// reference to the caption, not just the content next to it.</summary>
+        private Label AddLabel(TableLayoutPanel panel, string text, int row)
         {
-            panel.Controls.Add(new Label { Text = text, AutoSize = true, Font = Theme.FontSubheading, Margin = new Padding(0, 8, 10, 0) }, 0, row);
+            var label = new Label { Text = text, AutoSize = true, Font = Theme.FontSubheading, Margin = new Padding(0, 8, 10, 0) };
+            panel.Controls.Add(label, 0, row);
+            return label;
         }
 
         private void BrowseFolder(TextBox target)
@@ -276,11 +277,12 @@ namespace PhotoStudioApp.UI
             if (DateTime.TryParseExact(s.CurrentWorkDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out DateTime workDate))
                 _currentWorkDatePicker.Value = workDate;
 
-            _workerArchiveDisabledLabel.Visible = !s.WorkerArchiveFeatureEnabled;
-            _workerArchiveArmedCheck.Visible = s.WorkerArchiveFeatureEnabled;
-            _workerArchiveArmedCheck.Enabled = s.WorkerArchiveFeatureEnabled;
+            // Per Nass's request, when the feature is off the whole "Archiver" row - caption
+            // included - is hidden entirely rather than showing a "feature disabled" message;
+            // it's turned on/off from Historique > Paramètres admin, not from here.
+            _workerArchiveCaptionLabel.Visible = s.WorkerArchiveFeatureEnabled;
+            _workerArchivePanel.Visible = s.WorkerArchiveFeatureEnabled;
             _workerArchiveArmedCheck.Checked = s.WorkerArchiveFeatureEnabled && s.WorkerArchiveArmed;
-            _workerArchiveBtn.Visible = s.WorkerArchiveFeatureEnabled;
             _workerArchiveBtn.Enabled = s.WorkerArchiveFeatureEnabled && s.WorkerArchiveArmed;
         }
 

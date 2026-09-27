@@ -7,8 +7,13 @@
     public class MonthlyExpense
     {
         public int Id { get; set; }
-        /// <summary>"yyyy-MM", same format as MonthSummary.YearMonth.</summary>
+        /// <summary>"yyyy-MM" - which month this expense counts toward. Set by HistoryTab to
+        /// whichever month row was selected in "Résumé mensuel" when Ajouter was clicked.</summary>
         public string YearMonth { get; set; }
+        /// <summary>The actual date this expense was added on - set once, automatically, when
+        /// created (see HistoryTab.AddMonthExpenseBtn_Click), and left unchanged by later edits
+        /// to Description/Amount since it's a historical fact, not a "last modified" stamp.</summary>
+        public System.DateTime DateAdded { get; set; }
         public string Description { get; set; }
         public decimal Amount { get; set; }
     }
