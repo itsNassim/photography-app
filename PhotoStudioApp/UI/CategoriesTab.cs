@@ -13,6 +13,7 @@ namespace PhotoStudioApp.UI
         public event EventHandler CategoriesChanged;
 
         private readonly CategoryRepository _repo = new CategoryRepository();
+        private readonly CategoryAddOnRepository _addOnRepo = new CategoryAddOnRepository();
         private readonly ImportExportService _importExport = new ImportExportService();
         private DataGridView _grid;
 
@@ -43,6 +44,9 @@ namespace PhotoStudioApp.UI
             var toggleBtn = Theme.MakeSecondaryButton("Activer / Desactiver");
             toggleBtn.Width = 170;
             toggleBtn.Click += ToggleBtn_Click;
+            var addOnsBtn = Theme.MakeSecondaryButton("Extras...");
+            addOnsBtn.Width = 120;
+            addOnsBtn.Click += AddOnsBtn_Click;
             var exportBtn = Theme.MakeSecondaryButton("Exporter");
             exportBtn.Width = 110;
             exportBtn.Click += ExportBtn_Click;
@@ -52,6 +56,7 @@ namespace PhotoStudioApp.UI
             toolbar.Controls.Add(addBtn);
             toolbar.Controls.Add(editBtn);
             toolbar.Controls.Add(toggleBtn);
+            toolbar.Controls.Add(addOnsBtn);
             toolbar.Controls.Add(exportBtn);
             toolbar.Controls.Add(importBtn);
             root.Controls.Add(toolbar, 0, 1);
@@ -73,12 +78,18 @@ namespace PhotoStudioApp.UI
         public void RefreshAll()
         {
             var all = _repo.GetAllCategories(includeInactive: true);
+            var addOnCounts = _addOnRepo.GetCountsByParent();
             _grid.Rows.Clear();
             foreach (var cat in all)
             {
                 string folderDisplay = cat.HasFolder ? cat.FolderRelativePath : "(sans dossier - prix fixe)";
+                string typeDisplay = cat.IsCustom ? "Personnalisee" : "Fixe";
+                // A category that offers optional extras is effectively its own kind of category -
+                // say so right in the Type column so it's obvious at a glance which ones do.
+                if (addOnCounts.TryGetValue(cat.Id, out int extrasCount) && extrasCount > 0)
+                    typeDisplay += $" - avec extras ({extrasCount})";
                 int idx = _grid.Rows.Add(
-                    cat.Name, folderDisplay, cat.IsCustom ? "Personnalisee" : "Fixe",
+                    cat.Name, folderDisplay, typeDisplay,
                     cat.CurrentPrice.ToString("0.00"), cat.IsActive ? "Active" : "Desactivee");
                 _grid.Rows[idx].Tag = cat;
                 if (!cat.IsActive)
@@ -126,6 +137,34 @@ namespace PhotoStudioApp.UI
                     CategoriesChanged?.Invoke(this, EventArgs.Empty);
                 }
             }
+        }
+
+        /// <summary>Opens the manager for the selected category's optional extras (other categories
+        /// or stock items offered as tick-boxes when this category is chosen in "Ajouter une
+        /// charge"). Password-protected like every other change on this tab. Only categories
+        /// without a folder can offer extras - folder-based ones are counted from disk at closing
+        /// time and never picked in the charge screen, so extras could never be offered there.</summary>
+        private void AddOnsBtn_Click(object sender, EventArgs e)
+        {
+            var cat = Selected();
+            if (cat == null)
+            {
+                MessageBox.Show("Selectionnez d'abord une catégorie dans la liste.", "Aucune selection", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (cat.HasFolder)
+            {
+                MessageBox.Show(
+                    $"'{cat.Name}' est comptée depuis un dossier a la clôture, elle n'est jamais choisie dans \"Ajouter une charge\" - " +
+                    "les extras ne peuvent donc pas s'y appliquer.\n\nLes extras fonctionnent pour les catégories sans dossier (prix fixe).",
+                    "Extras non disponibles", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (!AuthGate.RequireAdminPassword(this, "Gérer les extras d'une catégorie", "Extras...")) return;
+
+            using (var dlg = new ManageCategoryAddOnsDialog(cat))
+                dlg.ShowDialog(this);
+            RefreshAll();
         }
 
         private void ToggleBtn_Click(object sender, EventArgs e)

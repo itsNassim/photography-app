@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -117,6 +117,7 @@
     <Compile Include="Models\LoginLogEntry.cs" />
     <Compile Include="Models\StudioActionLogEntry.cs" />
     <Compile Include="Models\MonthlyExpense.cs" />
+    <Compile Include="Models\CategoryAddOn.cs" />
     <Compile Include="Data\Db.cs" />
     <Compile Include="Data\SchemaInitializer.cs" />
     <Compile Include="Data\CategoryRepository.cs" />
@@ -129,6 +130,7 @@
     <Compile Include="Data\LoginLogRepository.cs" />
     <Compile Include="Data\StudioActionLogRepository.cs" />
     <Compile Include="Data\MonthlyExpenseRepository.cs" />
+    <Compile Include="Data\CategoryAddOnRepository.cs" />
     <Compile Include="Services\PasswordService.cs" />
     <Compile Include="Services\FolderCountService.cs" />
     <Compile Include="Services\ClosingService.cs" />
@@ -159,6 +161,7 @@
     <Compile Include="UI\Dialogs\AddCustomChargeDialog.cs" />
     <Compile Include="UI\Dialogs\AddExpenseDialog.cs" />
     <Compile Include="UI\Dialogs\AddEditMonthlyExpenseDialog.cs" />
+    <Compile Include="UI\Dialogs\ManageCategoryAddOnsDialog.cs" />
     <Compile Include="UI\Dialogs\PasswordPromptDialog.cs" />
     <Compile Include="UI\Dialogs\SetPasswordDialog.cs" />
     <Compile Include="UI\Dialogs\TypeToConfirmDialog.cs" />

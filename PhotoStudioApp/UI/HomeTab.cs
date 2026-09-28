@@ -860,16 +860,23 @@ namespace PhotoStudioApp.UI
                 if (dlg.ShowDialog() == DialogResult.OK)
                 {
                     var settings = _settingsRepo.LoadAll();
-                    var charge = dlg.ResultCharge;
-                    charge.WorkDate = settings.CurrentWorkDate;
-                    _chargeRepo.Add(charge);
 
-                    if (charge.LinkedStockItemId.HasValue && charge.Quantity.HasValue && charge.Quantity.Value > 0)
+                    // ResultCharges holds the main charge plus one entry per optional extra the
+                    // cashier ticked (see CategoryAddOn) - each is recorded as its own line, and
+                    // any stock item among them is consumed exactly like a standalone charge, so
+                    // deleting one line later restores just that line's stock.
+                    foreach (var charge in dlg.ResultCharges)
                     {
-                        _stockRepo.AdjustQuantity(charge.LinkedStockItemId.Value, -charge.Quantity.Value);
-                        var item = _stockRepo.GetById(charge.LinkedStockItemId.Value);
-                        if (item != null && item.IsOutOfStock)
-                            MessageBox.Show($"'{item.Name}' est maintenant en rupture de stock.", "Alerte stock", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        charge.WorkDate = settings.CurrentWorkDate;
+                        _chargeRepo.Add(charge);
+
+                        if (charge.LinkedStockItemId.HasValue && charge.Quantity.HasValue && charge.Quantity.Value > 0)
+                        {
+                            _stockRepo.AdjustQuantity(charge.LinkedStockItemId.Value, -charge.Quantity.Value);
+                            var item = _stockRepo.GetById(charge.LinkedStockItemId.Value);
+                            if (item != null && item.IsOutOfStock)
+                                MessageBox.Show($"'{item.Name}' est maintenant en rupture de stock.", "Alerte stock", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        }
                     }
                     RefreshCharges();
                     RefreshPendingBalances();

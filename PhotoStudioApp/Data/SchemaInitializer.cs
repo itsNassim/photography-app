@@ -150,6 +150,18 @@ namespace PhotoStudioApp.Data
                         Amount      REAL NOT NULL
                     );");
 
+                // Optional extras attached to a (service) category - e.g. "10x15 photo" can offer a
+                // frame (stock item), "Traitement" and "Assemblage" (other categories) as extras a
+                // cashier may tick when adding a charge. Exactly one of AddOnCategoryId /
+                // AddOnStockItemId is set per row (enforced in CategoryAddOnRepository).
+                Exec(conn, @"
+                    CREATE TABLE IF NOT EXISTS CategoryAddOns (
+                        Id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                        ParentCategoryId INTEGER NOT NULL REFERENCES Categories(Id),
+                        AddOnCategoryId  INTEGER REFERENCES Categories(Id),
+                        AddOnStockItemId INTEGER REFERENCES StockItems(Id)
+                    );");
+
                 tx.Commit();
             }
 

@@ -10,7 +10,14 @@ namespace PhotoStudioApp.UI.Dialogs
 {
     public class AddCustomChargeDialog : Form
     {
+        /// <summary>The main charge (always present once the dialog returns OK). Kept for the
+        /// callers that only ever deal with a single charge (editing one, paying a balance) - when
+        /// optional extras were ticked, this is just the first entry of ResultCharges.</summary>
         public CustomCharge ResultCharge { get; private set; }
+
+        /// <summary>Every charge to record: the main one first, then one per ticked extra (see
+        /// CategoryAddOn). Always at least one entry after an OK result.</summary>
+        public List<CustomCharge> ResultCharges { get; private set; } = new List<CustomCharge>();
 
         /// <summary>One dropdown entry - a stock item, a fixed-price no-folder category, an
         /// outstanding pending balance being paid off, or the "none / manual" placeholder.</summary>
@@ -23,24 +30,50 @@ namespace PhotoStudioApp.UI.Dialogs
             public override string ToString() => Label;
         }
 
+        /// <summary>One optional extra offered for the chosen category: a tick-box, a quantity
+        /// (e.g. number of people for a per-person price) and its computed line total.</summary>
+        private class ExtraRow
+        {
+            public string Name;
+            public Category Category;
+            public StockItem Stock;
+            public CheckBox Check;
+            public NumericUpDown Qty;
+            public Label LineLabel;
+
+            public decimal UnitPrice => Stock != null ? Stock.UnitPrice : Category.CurrentPrice;
+            public decimal Nominal => UnitPrice * Qty.Value;
+        }
+
+        private const int BaseHeight = 440;
+
         private readonly TextBox _descBox;
         private readonly NumericUpDown _amountBox;
+        private readonly Label _amountLabel;
         private readonly NumericUpDown _paidAmountBox;
         private readonly SearchableComboBox _linkCombo;
         private readonly NumericUpDown _qtyBox;
         private readonly CheckBox _autoAmountCheck;
+        private readonly Panel _extrasHost;
+        private readonly Panel _extrasScroll;
+        private readonly Label _extrasSummary;
         private readonly StockRepository _stockRepo = new StockRepository();
         private readonly CategoryRepository _categoryRepo = new CategoryRepository();
         private readonly PendingBalanceRepository _pendingRepo = new PendingBalanceRepository();
+        private readonly CategoryAddOnRepository _addOnRepo = new CategoryAddOnRepository();
+        private readonly List<ExtraRow> _extraRows = new List<ExtraRow>();
+        private readonly bool _isEditing;
         private List<LinkOption> _allOptions = new List<LinkOption>();
         private bool _restoringExisting;
         private decimal _lastSyncedPaidValue;
 
         public AddCustomChargeDialog(CustomCharge existing = null, PendingBalance preselectedBalance = null)
         {
+            _isEditing = existing != null;
+
             Text = existing == null ? "Ajouter une charge additionnelle" : "Modifier la charge additionnelle";
             Width = 480;
-            Height = 440;
+            Height = BaseHeight;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             StartPosition = FormStartPosition.CenterParent;
             MaximizeBox = false;
@@ -48,7 +81,7 @@ namespace PhotoStudioApp.UI.Dialogs
             Font = Theme.FontBase;
             BackColor = Theme.CardBackground;
 
-            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(20), RowCount = 7 };
+            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(20), RowCount = 8 };
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
@@ -73,17 +106,41 @@ namespace PhotoStudioApp.UI.Dialogs
             _autoAmountCheck.CheckedChanged += (s, e) => RecomputeAutoAmount();
             layout.Controls.Add(_autoAmountCheck, 1, 3);
 
-            layout.Controls.Add(new Label { Text = "Montant total :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 4);
+            // Optional extras for the chosen category (see CategoryAddOn) - hidden unless the
+            // selected category actually offers some; filled in by RebuildExtras.
+            _extrasHost = new Panel { Dock = DockStyle.Fill, Visible = false, Height = 0, Margin = new Padding(0, 6, 0, 6) };
+            _extrasScroll = new Panel { Left = 0, Top = 22, Width = 424, Height = 60, AutoScroll = true, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
+            _extrasSummary = new Label
+            {
+                Left = 0, Height = 22, Width = 424, AutoSize = false,
+                TextAlign = System.Drawing.ContentAlignment.MiddleRight,
+                Font = new System.Drawing.Font(Theme.FontBase, System.Drawing.FontStyle.Bold),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+            };
+            var extrasHeader = new Label
+            {
+                Text = "Extras optionnels (cochez ce que le client prend) :",
+                AutoSize = true, Left = 0, Top = 2,
+                Font = new System.Drawing.Font(Theme.FontBase, System.Drawing.FontStyle.Bold)
+            };
+            _extrasHost.Controls.Add(extrasHeader);
+            _extrasHost.Controls.Add(_extrasScroll);
+            _extrasHost.Controls.Add(_extrasSummary);
+            layout.Controls.Add(_extrasHost, 0, 4);
+            layout.SetColumnSpan(_extrasHost, 2);
+
+            _amountLabel = new Label { Text = "Montant total :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) };
+            layout.Controls.Add(_amountLabel, 0, 5);
             _amountBox = new NumericUpDown { Width = 120, Minimum = 0, Maximum = 1000000, DecimalPlaces = 2, Value = existing?.Amount ?? 0 };
             _amountBox.ValueChanged += (s, e) => SyncPaidToAmountIfUnlinkedDefault();
-            layout.Controls.Add(_amountBox, 1, 4);
+            layout.Controls.Add(_amountBox, 1, 5);
 
             // "Montant paye maintenant" comes LAST (after Montant/quantité/etc. are settled) so
             // filling in the rest of the form never overwrites a partial-payment amount the user
             // already typed here - see SyncPaidToAmountIfUnlinkedDefault.
-            layout.Controls.Add(new Label { Text = "Montant paye maintenant\n(si different, le reste devient\nun solde en attente) :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 5);
+            layout.Controls.Add(new Label { Text = "Montant paye maintenant\n(si different, le reste devient\nun solde en attente) :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 6);
             _paidAmountBox = new NumericUpDown { Width = 120, Minimum = 0, Maximum = 1000000, DecimalPlaces = 2, Value = existing?.Amount ?? 0 };
-            layout.Controls.Add(_paidAmountBox, 1, 5);
+            layout.Controls.Add(_paidAmountBox, 1, 6);
 
             var btnPanel = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Dock = DockStyle.Fill };
             var okBtn = Theme.MakePrimaryButton("Enregistrer");
@@ -94,16 +151,17 @@ namespace PhotoStudioApp.UI.Dialogs
             cancelBtn.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
             btnPanel.Controls.Add(okBtn);
             btnPanel.Controls.Add(cancelBtn);
-            layout.Controls.Add(btnPanel, 1, 6);
+            layout.Controls.Add(btnPanel, 1, 7);
 
             Controls.Add(layout);
             AcceptButton = okBtn;
             CancelButton = cancelBtn;
 
             // Populate the dropdown (and wire its change handler) only now that every field it
-            // touches (_qtyBox, _autoAmountCheck, _descBox, _amountBox, _paidAmountBox) actually
-            // exists - this used to run right after _linkCombo was created, before those fields
-            // existed yet, which threw a NullReferenceException the instant the dialog opened.
+            // touches (_qtyBox, _autoAmountCheck, _descBox, _amountBox, _paidAmountBox, and the
+            // extras panel) actually exists - this used to run right after _linkCombo was created,
+            // before those fields existed yet, which threw a NullReferenceException the instant
+            // the dialog opened.
             BuildLinkOptions();
             _linkCombo.SelectedItemChanged += LinkCombo_SelectedIndexChanged;
             _linkCombo.SelectedItem = _allOptions[0];
@@ -169,10 +227,14 @@ namespace PhotoStudioApp.UI.Dialogs
                 _allOptions.Add(new LinkOption { Label = label, Stock = item });
             }
 
+            var extrasCounts = _addOnRepo.GetCountsByParent();
             var serviceCategories = _categoryRepo.GetActiveServiceCategories();
             foreach (var cat in serviceCategories)
             {
-                string label = $"[Catégorie] {cat.Name}  ({cat.CurrentPrice:0.00} / unité)";
+                // A small hint on categories that offer optional extras, so the cashier knows
+                // picking it will show a tick-list of extras.
+                string extrasHint = extrasCounts.ContainsKey(cat.Id) ? "  + extras" : "";
+                string label = $"[Catégorie] {cat.Name}  ({cat.CurrentPrice:0.00} / unité){extrasHint}";
                 _allOptions.Add(new LinkOption { Label = label, ServiceCategory = cat });
             }
 
@@ -189,6 +251,10 @@ namespace PhotoStudioApp.UI.Dialogs
             var option = SelectedOption();
             bool linkedToPriced = option?.Stock != null || option?.ServiceCategory != null;
             bool linkedToBalance = option?.Balance != null;
+
+            // Only when ADDING a charge for a service category can extras be offered - editing an
+            // existing single charge line never shows them.
+            RebuildExtras(_isEditing ? null : option?.ServiceCategory);
 
             _qtyBox.Enabled = linkedToPriced;
             _autoAmountCheck.Enabled = linkedToPriced;
@@ -233,6 +299,119 @@ namespace PhotoStudioApp.UI.Dialogs
             }
         }
 
+        // ---------------------------------------------------------------------------------
+        // Optional extras
+        // ---------------------------------------------------------------------------------
+
+        /// <summary>Clears and rebuilds the extras tick-list for the given parent category (null =
+        /// no extras: hides the panel). Only extras that can actually be billed right now are
+        /// offered - an extra whose category/stock item has since been deactivated is skipped.</summary>
+        private void RebuildExtras(Category parent)
+        {
+            foreach (var c in _extrasScroll.Controls.Cast<Control>().ToList())
+            {
+                _extrasScroll.Controls.Remove(c);
+                c.Dispose();
+            }
+            _extraRows.Clear();
+
+            if (parent != null)
+            {
+                foreach (var link in _addOnRepo.GetForParent(parent.Id))
+                {
+                    var row = new ExtraRow();
+                    string label;
+                    if (link.AddOnCategoryId.HasValue)
+                    {
+                        var cat = _categoryRepo.GetById(link.AddOnCategoryId.Value);
+                        if (cat == null || !cat.IsActive || cat.HasFolder) continue;
+                        row.Category = cat;
+                        row.Name = cat.Name;
+                        label = $"{cat.Name}  ({cat.CurrentPrice:0.00} / unité)";
+                    }
+                    else if (link.AddOnStockItemId.HasValue)
+                    {
+                        var item = _stockRepo.GetById(link.AddOnStockItemId.Value);
+                        if (item == null || !item.IsActive) continue;
+                        row.Stock = item;
+                        row.Name = item.Name;
+                        string stockInfo = item.IsOutOfStock ? "RUPTURE" : $"stock : {item.Quantity}";
+                        label = $"{item.Name}  ({item.UnitPrice:0.00})  [{stockInfo}]";
+                    }
+                    else
+                    {
+                        continue;
+                    }
+
+                    int y = _extraRows.Count * 30 + 2;
+                    row.Check = new CheckBox { Text = label, Left = 4, Top = y + 2, Width = 262, AutoSize = false, Height = 22 };
+                    row.Qty = new NumericUpDown { Left = 270, Top = y, Width = 58, Minimum = 1, Maximum = 10000, Value = 1, Enabled = false };
+                    row.LineLabel = new Label { Left = 332, Top = y + 3, Width = 86, Height = 20, TextAlign = System.Drawing.ContentAlignment.MiddleRight };
+
+                    var captured = row;
+                    row.Check.CheckedChanged += (s, e) =>
+                    {
+                        captured.Qty.Enabled = captured.Check.Checked;
+                        OnExtrasChanged();
+                    };
+                    row.Qty.ValueChanged += (s, e) => OnExtrasChanged();
+
+                    _extrasScroll.Controls.Add(row.Check);
+                    _extrasScroll.Controls.Add(row.Qty);
+                    _extrasScroll.Controls.Add(row.LineLabel);
+                    _extraRows.Add(row);
+                }
+            }
+
+            if (_extraRows.Count == 0)
+            {
+                _extrasHost.Visible = false;
+                _extrasHost.Height = 0;
+                _amountLabel.Text = "Montant total :";
+                ResizeForExtras(0);
+                SyncPaidToAmountIfUnlinkedDefault();
+                return;
+            }
+
+            int scrollHeight = Math.Min(130, _extraRows.Count * 30 + 4);
+            _extrasScroll.Height = scrollHeight;
+            _extrasSummary.Top = 22 + scrollHeight + 4;
+            _extrasHost.Height = _extrasSummary.Top + 22;
+            _extrasHost.Visible = true;
+            _amountLabel.Text = "Montant (sans extras) :";
+            ResizeForExtras(_extrasHost.Height + 12);
+            OnExtrasChanged();
+        }
+
+        /// <summary>Grows/shrinks the dialog to fit the extras panel, keeping it fully on screen
+        /// (a fixed-size dialog that just gets taller can otherwise run off the bottom of a small
+        /// screen).</summary>
+        private void ResizeForExtras(int extraHeight)
+        {
+            Height = BaseHeight + extraHeight;
+            if (Visible)
+            {
+                var wa = Screen.FromControl(this).WorkingArea;
+                if (Bottom > wa.Bottom)
+                    Top = Math.Max(wa.Top, wa.Bottom - Height);
+            }
+        }
+
+        private decimal ExtrasTotal() => _extraRows.Where(r => r.Check.Checked).Sum(r => r.Nominal);
+
+        /// <summary>Main amount + every ticked extra - what the customer owes for this whole
+        /// purchase, and what "Montant paye maintenant" defaults to.</summary>
+        private decimal GrandTotal() => _amountBox.Value + ExtrasTotal();
+
+        private void OnExtrasChanged()
+        {
+            foreach (var r in _extraRows)
+                r.LineLabel.Text = r.Check.Checked ? $"= {r.Nominal:0.00}" : "";
+
+            _extrasSummary.Text = $"Extras : +{ExtrasTotal():0.00}      Total avec extras : {GrandTotal():0.00}";
+            SyncPaidToAmountIfUnlinkedDefault();
+        }
+
         private void RecomputeAutoAmount()
         {
             var option = SelectedOption();
@@ -250,20 +429,38 @@ namespace PhotoStudioApp.UI.Dialogs
                 _amountBox.Enabled = true;
             }
 
-            SyncPaidToAmountIfUnlinkedDefault();
+            if (_extraRows.Count > 0)
+                OnExtrasChanged(); // refreshes the "Total avec extras" summary too
+            else
+                SyncPaidToAmountIfUnlinkedDefault();
         }
 
-        /// <summary>Keeps "Montant paye maintenant" defaulted to the full Montant as the user
-        /// fills in the rest of the form (so the common case - fully paid - needs no extra
-        /// step), WITHOUT clobbering a partial amount the user may have already typed there:
-        /// this only re-syncs the value while the two boxes still match (i.e. nothing has
-        /// diverged them yet). Once the user edits "Montant paye maintenant" to anything
-        /// different from Montant, this stops touching it.</summary>
+        /// <summary>Keeps "Montant paye maintenant" defaulted to the full total (main amount plus
+        /// any ticked extras) as the user fills in the rest of the form (so the common case -
+        /// fully paid - needs no extra step), WITHOUT clobbering a partial amount the user may
+        /// have already typed there: this only re-syncs the value while the two boxes still match
+        /// (i.e. nothing has diverged them yet). Once the user edits "Montant paye maintenant" to
+        /// anything different from the total, this stops touching it.</summary>
         private void SyncPaidToAmountIfUnlinkedDefault()
         {
             if (_paidAmountBox.Value == _lastSyncedPaidValue)
-                _paidAmountBox.Value = Math.Min(_paidAmountBox.Maximum, _amountBox.Value);
+                _paidAmountBox.Value = Math.Min(_paidAmountBox.Maximum, GrandTotal());
             _lastSyncedPaidValue = _paidAmountBox.Value;
+        }
+
+        private bool ConfirmStock(StockItem item, decimal wantedQty)
+        {
+            if (item.IsOutOfStock)
+            {
+                return MessageBox.Show($"'{item.Name}' est en rupture de stock. Ajouter cette charge quand meme ?",
+                    "Rupture de stock", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes;
+            }
+            if (wantedQty > item.Quantity)
+            {
+                return MessageBox.Show($"Il ne reste que {item.Quantity} de '{item.Name}', mais {wantedQty} sont demandes. Continuer quand meme ?",
+                    "Stock insuffisant", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes;
+            }
+            return true;
         }
 
         private void OkBtn_Click(object sender, EventArgs e)
@@ -275,49 +472,78 @@ namespace PhotoStudioApp.UI.Dialogs
             }
 
             var option = SelectedOption();
+            var chosenExtras = _extraRows.Where(r => r.Check.Checked).ToList();
 
-            if (option?.Stock != null)
+            if (option?.Stock != null && !ConfirmStock(option.Stock, _qtyBox.Value))
+                return;
+            foreach (var x in chosenExtras.Where(r => r.Stock != null))
             {
-                var item = option.Stock;
-                if (item.IsOutOfStock)
-                {
-                    if (MessageBox.Show($"'{item.Name}' est en rupture de stock. Ajouter cette charge quand meme ?",
-                        "Rupture de stock", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
-                        return;
-                }
-                else if (_qtyBox.Value > item.Quantity)
-                {
-                    if (MessageBox.Show($"Il ne reste que {item.Quantity} de '{item.Name}', mais {_qtyBox.Value} sont demandes. Continuer quand meme ?",
-                        "Stock insuffisant", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
-                        return;
-                }
+                if (!ConfirmStock(x.Stock, x.Qty.Value))
+                    return;
             }
 
-            decimal total = _amountBox.Value;
+            decimal baseNominal = _amountBox.Value;
+            decimal total = baseNominal + chosenExtras.Sum(x => x.Nominal);
             decimal paidNow = Math.Min(_paidAmountBox.Value, total);
             decimal shortfall = total - paidNow;
+
+            string desc = _descBox.Text.Trim();
+            string bundleDesc = chosenExtras.Count > 0 ? $"{desc} (+ {chosenExtras.Count} extra(s))" : desc;
 
             if (shortfall > 0.005m && !string.IsNullOrWhiteSpace(_descBox.Text))
             {
                 string msg = option?.Balance != null
                     ? $"{paidNow:0.00} paye maintenant sur ce solde - il restera {shortfall:0.00} en attente. Continuer ?"
-                    : $"Le client paye {paidNow:0.00} sur un total de {total:0.00} - un solde en attente de {shortfall:0.00} sera créé pour \"{_descBox.Text.Trim()}\". Continuer ?";
+                    : $"Le client paye {paidNow:0.00} sur un total de {total:0.00} - un solde en attente de {shortfall:0.00} sera créé pour \"{bundleDesc}\". Continuer ?";
                 if (MessageBox.Show(msg, "Paiement partiel", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
                     return;
             }
 
-            // Only the amount actually collected today counts as this charge's amount - it's
-            // what gets added to TODAY's revenue total, per the "paid on the day it's paid"
-            // rule. The unpaid shortfall (if any) is tracked separately as a pending balance,
-            // never as part of today's total.
-            ResultCharge = new CustomCharge
+            // Only the amount actually collected today counts as a charge's amount - it's what
+            // gets added to TODAY's revenue total, per the "paid on the day it's paid" rule. The
+            // unpaid shortfall (if any) is tracked separately as a pending balance, never as part
+            // of today's total. With extras ticked, the money actually paid is spread over the
+            // lines in order (main item first, then extras) - each line takes what it's worth
+            // until the paid amount runs out - so a fully-paid purchase records every line at its
+            // full price, and a part-paid one fills lines from the top.
+            var nominals = new List<decimal> { baseNominal };
+            nominals.AddRange(chosenExtras.Select(x => x.Nominal));
+
+            var allocated = new List<decimal>();
+            decimal remainingPaid = paidNow;
+            foreach (var nominal in nominals)
             {
-                Description = _descBox.Text.Trim(),
-                Amount = paidNow,
-                LinkedStockItemId = option?.Stock?.Id,
-                LinkedCategoryId = option?.ServiceCategory?.Id,
-                Quantity = (option?.Stock != null || option?.ServiceCategory != null) ? (int)_qtyBox.Value : (int?)null
+                decimal part = Math.Min(nominal, remainingPaid);
+                allocated.Add(part);
+                remainingPaid -= part;
+            }
+
+            var charges = new List<CustomCharge>
+            {
+                new CustomCharge
+                {
+                    Description = desc,
+                    Amount = allocated[0],
+                    LinkedStockItemId = option?.Stock?.Id,
+                    LinkedCategoryId = option?.ServiceCategory?.Id,
+                    Quantity = (option?.Stock != null || option?.ServiceCategory != null) ? (int)_qtyBox.Value : (int?)null
+                }
             };
+            for (int i = 0; i < chosenExtras.Count; i++)
+            {
+                var x = chosenExtras[i];
+                charges.Add(new CustomCharge
+                {
+                    Description = x.Name,
+                    Amount = allocated[i + 1],
+                    LinkedStockItemId = x.Stock?.Id,
+                    LinkedCategoryId = x.Category?.Id,
+                    Quantity = (int)x.Qty.Value
+                });
+            }
+
+            ResultCharges = charges;
+            ResultCharge = charges[0];
 
             if (option?.Balance != null)
             {
@@ -325,7 +551,7 @@ namespace PhotoStudioApp.UI.Dialogs
             }
             else if (shortfall > 0.005m)
             {
-                _pendingRepo.Add(_descBox.Text.Trim(), total, shortfall, DateTime.Now.ToString("yyyy-MM-dd"));
+                _pendingRepo.Add(bundleDesc, total, shortfall, DateTime.Now.ToString("yyyy-MM-dd"));
             }
 
             DialogResult = DialogResult.OK;
