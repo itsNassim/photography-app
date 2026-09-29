@@ -131,6 +131,7 @@
     <Compile Include="Data\StudioActionLogRepository.cs" />
     <Compile Include="Data\MonthlyExpenseRepository.cs" />
     <Compile Include="Data\CategoryAddOnRepository.cs" />
+    <Compile Include="Services\TextSearch.cs" />
     <Compile Include="Services\PasswordService.cs" />
     <Compile Include="Services\FolderCountService.cs" />
     <Compile Include="Services\ClosingService.cs" />

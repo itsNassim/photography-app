@@ -17,6 +17,9 @@ namespace PhotoStudioApp.UI
         private DataGridView _grid;
         private TextBox _searchBox;
         private ComboBox _filterCombo;
+        private ComboBox _categoryCombo;
+        private bool _rebuildingCategoryFilter;
+        private const string AllCategoriesLabel = "Toutes les catégories";
 
         public StockTab()
         {
@@ -45,6 +48,15 @@ namespace PhotoStudioApp.UI
             _filterCombo.SelectedIndex = 0;
             _filterCombo.SelectedIndexChanged += (s, e) => ApplyFilter();
 
+            // Filter by the stock item's category (the free-text "Catégorie" set on each item).
+            // Populated for real by RebuildCategoryFilter in RefreshAll; it starts with just the
+            // "all" entry, and its change handler is wired only AFTER that first item is
+            // selected so building the tab never triggers a filter before the grid exists.
+            _categoryCombo = new ComboBox { Width = 200, DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(0, 4, 14, 4) };
+            _categoryCombo.Items.Add(AllCategoriesLabel);
+            _categoryCombo.SelectedIndex = 0;
+            _categoryCombo.SelectedIndexChanged += (s, e) => { if (!_rebuildingCategoryFilter) ApplyFilter(); };
+
             var addBtn = Theme.MakePrimaryButton("+ Ajouter");
             addBtn.Width = 120;
             addBtn.Click += AddBtn_Click;
@@ -68,6 +80,8 @@ namespace PhotoStudioApp.UI
             toolbar.Controls.Add(_searchBox);
             toolbar.Controls.Add(new Label { Text = "Filtre :", AutoSize = true, Margin = new Padding(0, 9, 4, 0) });
             toolbar.Controls.Add(_filterCombo);
+            toolbar.Controls.Add(new Label { Text = "Catégorie :", AutoSize = true, Margin = new Padding(0, 9, 4, 0) });
+            toolbar.Controls.Add(_categoryCombo);
             toolbar.Controls.Add(addBtn);
             toolbar.Controls.Add(editBtn);
             toolbar.Controls.Add(restockBtn);
@@ -120,15 +134,51 @@ namespace PhotoStudioApp.UI
             }
         }
 
-        public void RefreshAll() => ApplyFilter();
+        public void RefreshAll()
+        {
+            RebuildCategoryFilter();
+            ApplyFilter();
+        }
+
+        /// <summary>Refills the category dropdown with every distinct category currently used by an
+        /// active stock item (so a newly added item's category shows up right away), keeping the
+        /// current selection if that category still exists.</summary>
+        private void RebuildCategoryFilter()
+        {
+            string previous = _categoryCombo.SelectedItem as string;
+            var categories = _repo.GetAll(activeOnly: true)
+                .Select(i => i.Category?.Trim())
+                .Where(c => !string.IsNullOrEmpty(c))
+                .Distinct(StringComparer.CurrentCultureIgnoreCase)
+                .OrderBy(c => c, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+
+            _rebuildingCategoryFilter = true;
+            try
+            {
+                _categoryCombo.Items.Clear();
+                _categoryCombo.Items.Add(AllCategoriesLabel);
+                foreach (var c in categories)
+                    _categoryCombo.Items.Add(c);
+
+                int idx = previous == null ? 0 : _categoryCombo.Items.IndexOf(previous);
+                _categoryCombo.SelectedIndex = idx >= 0 ? idx : 0;
+            }
+            finally
+            {
+                _rebuildingCategoryFilter = false;
+            }
+        }
 
         private void ApplyFilter()
         {
             var all = _repo.GetAll(activeOnly: true);
-            string search = _searchBox.Text?.Trim().ToLowerInvariant() ?? "";
             string filter = _filterCombo.SelectedItem?.ToString() ?? "Tous";
+            string categoryFilter = _categoryCombo.SelectedItem as string;
 
-            var filtered = all.Where(i => string.IsNullOrEmpty(search) || i.Name.ToLowerInvariant().Contains(search));
+            var filtered = all.Where(i => TextSearch.MatchesAny(_searchBox.Text, i.Name));
+            if (!string.IsNullOrEmpty(categoryFilter) && categoryFilter != AllCategoriesLabel)
+                filtered = filtered.Where(i => string.Equals(i.Category?.Trim(), categoryFilter, StringComparison.CurrentCultureIgnoreCase));
             if (filter == "Stock bas") filtered = filtered.Where(i => i.IsLowStock);
             else if (filter == "Rupture de stock") filtered = filtered.Where(i => i.IsOutOfStock);
 

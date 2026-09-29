@@ -16,6 +16,9 @@ namespace PhotoStudioApp.UI
         private readonly CategoryAddOnRepository _addOnRepo = new CategoryAddOnRepository();
         private readonly ImportExportService _importExport = new ImportExportService();
         private DataGridView _grid;
+        private TextBox _searchBox;
+        private System.Collections.Generic.List<Category> _allCategories = new System.Collections.Generic.List<Category>();
+        private System.Collections.Generic.Dictionary<int, int> _addOnCounts = new System.Collections.Generic.Dictionary<int, int>();
 
         public CategoriesTab()
         {
@@ -35,6 +38,9 @@ namespace PhotoStudioApp.UI
             root.Controls.Add(title, 0, 0);
 
             var toolbar = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 8) };
+            var searchLabel = new Label { Text = "Rechercher :", AutoSize = true, Margin = new Padding(0, 9, 4, 0) };
+            _searchBox = new TextBox { Width = 220, Font = Theme.FontBase, Margin = new Padding(0, 4, 14, 4) };
+            _searchBox.TextChanged += (s, e) => ApplyFilter();
             var addBtn = Theme.MakePrimaryButton("+ Ajouter");
             addBtn.Width = 120;
             addBtn.Click += AddBtn_Click;
@@ -53,6 +59,8 @@ namespace PhotoStudioApp.UI
             var importBtn = Theme.MakeSecondaryButton("Importer");
             importBtn.Width = 110;
             importBtn.Click += ImportBtn_Click;
+            toolbar.Controls.Add(searchLabel);
+            toolbar.Controls.Add(_searchBox);
             toolbar.Controls.Add(addBtn);
             toolbar.Controls.Add(editBtn);
             toolbar.Controls.Add(toggleBtn);
@@ -75,22 +83,36 @@ namespace PhotoStudioApp.UI
             Controls.Add(root);
         }
 
+        /// <summary>Reloads categories from the database, then re-applies whatever is typed in the
+        /// search box (so an add/edit/toggle never silently clears the current search).</summary>
         public void RefreshAll()
         {
-            var all = _repo.GetAllCategories(includeInactive: true);
-            var addOnCounts = _addOnRepo.GetCountsByParent();
+            _allCategories = _repo.GetAllCategories(includeInactive: true);
+            _addOnCounts = _addOnRepo.GetCountsByParent();
+            ApplyFilter();
+        }
+
+        private void ApplyFilter()
+        {
+            if (_grid == null) return;
+
             _grid.Rows.Clear();
-            foreach (var cat in all)
+            foreach (var cat in _allCategories)
             {
                 string folderDisplay = cat.HasFolder ? cat.FolderRelativePath : "(sans dossier - prix fixe)";
                 string typeDisplay = cat.IsCustom ? "Personnalisee" : "Fixe";
                 // A category that offers optional extras is effectively its own kind of category -
                 // say so right in the Type column so it's obvious at a glance which ones do.
-                if (addOnCounts.TryGetValue(cat.Id, out int extrasCount) && extrasCount > 0)
+                if (_addOnCounts.TryGetValue(cat.Id, out int extrasCount) && extrasCount > 0)
                     typeDisplay += $" - avec extras ({extrasCount})";
+
+                string statusDisplay = cat.IsActive ? "Active" : "Desactivee";
+                if (!TextSearch.MatchesAny(_searchBox?.Text, cat.Name, folderDisplay, typeDisplay, statusDisplay))
+                    continue;
+
                 int idx = _grid.Rows.Add(
                     cat.Name, folderDisplay, typeDisplay,
-                    cat.CurrentPrice.ToString("0.00"), cat.IsActive ? "Active" : "Desactivee");
+                    cat.CurrentPrice.ToString("0.00"), statusDisplay);
                 _grid.Rows[idx].Tag = cat;
                 if (!cat.IsActive)
                 {

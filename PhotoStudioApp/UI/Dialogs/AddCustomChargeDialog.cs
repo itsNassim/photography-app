@@ -56,6 +56,7 @@ namespace PhotoStudioApp.UI.Dialogs
         private readonly CheckBox _autoAmountCheck;
         private readonly Panel _extrasHost;
         private readonly Panel _extrasScroll;
+        private readonly TableLayoutPanel _extrasTable;
         private readonly Label _extrasSummary;
         private readonly StockRepository _stockRepo = new StockRepository();
         private readonly CategoryRepository _categoryRepo = new CategoryRepository();
@@ -72,7 +73,7 @@ namespace PhotoStudioApp.UI.Dialogs
             _isEditing = existing != null;
 
             Text = existing == null ? "Ajouter une charge additionnelle" : "Modifier la charge additionnelle";
-            Width = 480;
+            Width = 660;
             Height = BaseHeight;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             StartPosition = FormStartPosition.CenterParent;
@@ -82,18 +83,18 @@ namespace PhotoStudioApp.UI.Dialogs
             BackColor = Theme.CardBackground;
 
             var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(20), RowCount = 8 };
-            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 200));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
             // SearchableComboBox instead of a plain ComboBox: its dropdown has its own search
             // box built into it (at the top of the popup list), rather than relying on a
             // separate field or on OS-level autocomplete in the main text area.
             layout.Controls.Add(new Label { Text = "Catégorie, article de stock,\nou solde en attente :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 0);
-            _linkCombo = new SearchableComboBox { Width = 270 };
+            _linkCombo = new SearchableComboBox { Width = 390 };
             layout.Controls.Add(_linkCombo, 1, 0);
 
             layout.Controls.Add(new Label { Text = "Description :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 1);
-            _descBox = new TextBox { Width = 270, Text = existing?.Description ?? "" };
+            _descBox = new TextBox { Width = 390, Text = existing?.Description ?? "" };
             layout.Controls.Add(_descBox, 1, 1);
 
             layout.Controls.Add(new Label { Text = "Quantité :", AutoSize = true, Margin = new Padding(0, 8, 0, 0) }, 0, 2);
@@ -107,24 +108,44 @@ namespace PhotoStudioApp.UI.Dialogs
             layout.Controls.Add(_autoAmountCheck, 1, 3);
 
             // Optional extras for the chosen category (see CategoryAddOn) - hidden unless the
-            // selected category actually offers some; filled in by RebuildExtras.
+            // selected category actually offers some; filled in by RebuildExtras. Built entirely
+            // from docked panels and a table (no hand-placed pixel coordinates or anchors): an
+            // earlier version anchored children to the host before it had its real width, which
+            // pushed the quantity boxes, totals and summary past the right edge of the window.
             _extrasHost = new Panel { Dock = DockStyle.Fill, Visible = false, Height = 0, Margin = new Padding(0, 6, 0, 6) };
-            _extrasScroll = new Panel { Left = 0, Top = 22, Width = 424, Height = 60, AutoScroll = true, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
-            _extrasSummary = new Label
+
+            _extrasTable = new TableLayoutPanel
             {
-                Left = 0, Height = 22, Width = 424, AutoSize = false,
-                TextAlign = System.Drawing.ContentAlignment.MiddleRight,
-                Font = new System.Drawing.Font(Theme.FontBase, System.Drawing.FontStyle.Bold),
-                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                ColumnCount = 3
             };
+            _extrasTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            _extrasTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80));
+            _extrasTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
+
+            _extrasScroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+            _extrasScroll.Controls.Add(_extrasTable);
+
             var extrasHeader = new Label
             {
                 Text = "Extras optionnels (cochez ce que le client prend) :",
-                AutoSize = true, Left = 0, Top = 2,
+                Dock = DockStyle.Top, AutoSize = false, Height = 26,
+                TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
                 Font = new System.Drawing.Font(Theme.FontBase, System.Drawing.FontStyle.Bold)
             };
-            _extrasHost.Controls.Add(extrasHeader);
+            _extrasSummary = new Label
+            {
+                Dock = DockStyle.Bottom, AutoSize = false, Height = 28,
+                TextAlign = System.Drawing.ContentAlignment.MiddleRight,
+                Font = new System.Drawing.Font(Theme.FontBase, System.Drawing.FontStyle.Bold)
+            };
+
+            // Docking is resolved back-to-front: the Fill panel is added first so the Top header
+            // and Bottom summary claim their strips and the scroll area gets what's left.
             _extrasHost.Controls.Add(_extrasScroll);
+            _extrasHost.Controls.Add(extrasHeader);
             _extrasHost.Controls.Add(_extrasSummary);
             layout.Controls.Add(_extrasHost, 0, 4);
             layout.SetColumnSpan(_extrasHost, 2);
@@ -308,11 +329,13 @@ namespace PhotoStudioApp.UI.Dialogs
         /// offered - an extra whose category/stock item has since been deactivated is skipped.</summary>
         private void RebuildExtras(Category parent)
         {
-            foreach (var c in _extrasScroll.Controls.Cast<Control>().ToList())
+            foreach (var ctl in _extrasTable.Controls.Cast<Control>().ToList())
             {
-                _extrasScroll.Controls.Remove(c);
-                c.Dispose();
+                _extrasTable.Controls.Remove(ctl);
+                ctl.Dispose();
             }
+            _extrasTable.RowStyles.Clear();
+            _extrasTable.RowCount = 0;
             _extraRows.Clear();
 
             if (parent != null)
@@ -343,10 +366,27 @@ namespace PhotoStudioApp.UI.Dialogs
                         continue;
                     }
 
-                    int y = _extraRows.Count * 30 + 2;
-                    row.Check = new CheckBox { Text = label, Left = 4, Top = y + 2, Width = 262, AutoSize = false, Height = 22 };
-                    row.Qty = new NumericUpDown { Left = 270, Top = y, Width = 58, Minimum = 1, Maximum = 10000, Value = 1, Enabled = false };
-                    row.LineLabel = new Label { Left = 332, Top = y + 3, Width = 86, Height = 20, TextAlign = System.Drawing.ContentAlignment.MiddleRight };
+                    int rowIndex = _extraRows.Count;
+                    _extrasTable.RowCount = rowIndex + 1;
+                    _extrasTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+
+                    // AutoEllipsis: a very long stock/category name is shortened with "..." rather
+                    // than stretching the row past the edge of the window.
+                    row.Check = new CheckBox
+                    {
+                        Text = label, Dock = DockStyle.Fill, AutoSize = false, AutoEllipsis = true,
+                        TextAlign = System.Drawing.ContentAlignment.MiddleLeft, Margin = new Padding(4, 2, 4, 2)
+                    };
+                    row.Qty = new NumericUpDown
+                    {
+                        Width = 66, Minimum = 1, Maximum = 10000, Value = 1, Enabled = false,
+                        Anchor = AnchorStyles.Left, Margin = new Padding(4, 3, 4, 3)
+                    };
+                    row.LineLabel = new Label
+                    {
+                        Dock = DockStyle.Fill, AutoSize = false, Margin = new Padding(0, 0, 8, 0),
+                        TextAlign = System.Drawing.ContentAlignment.MiddleRight
+                    };
 
                     var captured = row;
                     row.Check.CheckedChanged += (s, e) =>
@@ -356,9 +396,9 @@ namespace PhotoStudioApp.UI.Dialogs
                     };
                     row.Qty.ValueChanged += (s, e) => OnExtrasChanged();
 
-                    _extrasScroll.Controls.Add(row.Check);
-                    _extrasScroll.Controls.Add(row.Qty);
-                    _extrasScroll.Controls.Add(row.LineLabel);
+                    _extrasTable.Controls.Add(row.Check, 0, rowIndex);
+                    _extrasTable.Controls.Add(row.Qty, 1, rowIndex);
+                    _extrasTable.Controls.Add(row.LineLabel, 2, rowIndex);
                     _extraRows.Add(row);
                 }
             }
@@ -373,10 +413,9 @@ namespace PhotoStudioApp.UI.Dialogs
                 return;
             }
 
-            int scrollHeight = Math.Min(130, _extraRows.Count * 30 + 4);
-            _extrasScroll.Height = scrollHeight;
-            _extrasSummary.Top = 22 + scrollHeight + 4;
-            _extrasHost.Height = _extrasSummary.Top + 22;
+            // Header (26) + the tick-list (up to ~5 rows before it scrolls) + summary (28).
+            int scrollHeight = Math.Min(170, _extraRows.Count * 34 + 4);
+            _extrasHost.Height = 26 + scrollHeight + 28;
             _extrasHost.Visible = true;
             _amountLabel.Text = "Montant (sans extras) :";
             ResizeForExtras(_extrasHost.Height + 12);

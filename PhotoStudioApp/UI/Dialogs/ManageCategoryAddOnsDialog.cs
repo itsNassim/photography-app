@@ -36,8 +36,9 @@ namespace PhotoStudioApp.UI.Dialogs
             _parent = parent;
 
             Text = $"Extras optionnels - {parent.Name}";
-            Width = 620;
-            Height = 500;
+            Width = 760;
+            Height = 560;
+            MinimumSize = new System.Drawing.Size(720, 500);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             StartPosition = FormStartPosition.CenterParent;
             MaximizeBox = false;
@@ -65,12 +66,16 @@ namespace PhotoStudioApp.UI.Dialogs
                 AutoSize = true, ForeColor = System.Drawing.Color.Gray, Margin = new Padding(0, 0, 0, 10)
             }, 0, 1);
 
-            var addRow = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 0, 0, 8) };
-            _picker = new SearchableComboBox { Width = 400, Margin = new Padding(0, 0, 8, 0) };
+            // Picker + button use a docked row (Fill/Right) instead of a FlowLayoutPanel so the
+            // picker always claims "whatever width is left" - a Fill child inside FlowLayoutPanel
+            // does not actually stretch to fill remaining space, which previously left both the
+            // picker and (via the same mistake below) the buttons undersized/clipped.
+            var addRow = new Panel { Dock = DockStyle.Top, Height = 32, Margin = new Padding(0, 0, 0, 8) };
             var addBtn = Theme.MakePrimaryButton("+ Ajouter");
-            addBtn.Width = 110;
-            addBtn.Margin = new Padding(0, -2, 0, 0);
+            addBtn.Dock = DockStyle.Right;
+            addBtn.Width = 130;
             addBtn.Click += AddBtn_Click;
+            _picker = new SearchableComboBox { Dock = DockStyle.Fill };
             addRow.Controls.Add(_picker);
             addRow.Controls.Add(addBtn);
             root.Controls.Add(addRow, 0, 2);
@@ -81,17 +86,33 @@ namespace PhotoStudioApp.UI.Dialogs
             _grid.Columns.Add("Name", "Nom");
             _grid.Columns.Add("Price", "Prix unitaire");
             _grid.Columns.Add("Status", "Statut");
+            // Explicit fill-weights (rather than the default equal split) so "Nom" gets the
+            // most room and the two shorter headers ("Type", "Statut") aren't stretched wider
+            // than the text they hold needs.
+            _grid.Columns["Type"].FillWeight = 18;
+            _grid.Columns["Name"].FillWeight = 44;
+            _grid.Columns["Price"].FillWeight = 20;
+            _grid.Columns["Status"].FillWeight = 18;
             root.Controls.Add(_grid, 0, 3);
 
-            var btnPanel = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 10, 0, 0) };
+            // Right-docked buttons, added right-to-left in code so "Fermer" ends up on the far
+            // right and "Retirer" to its left - same visual result as the old RightToLeft
+            // FlowLayoutPanel, but each button keeps its full requested width instead of being
+            // squeezed/clipped when the panel's available width ran short.
+            var btnPanel = new Panel { Dock = DockStyle.Top, Height = 36, Margin = new Padding(0, 10, 0, 0) };
             var closeBtn = Theme.MakeSecondaryButton("Fermer");
-            closeBtn.Width = 100;
+            closeBtn.Dock = DockStyle.Right;
+            closeBtn.Width = 120;
             closeBtn.Click += (s, e) => { DialogResult = DialogResult.OK; Close(); };
             var removeBtn = Theme.MakeDangerButton("Retirer");
-            removeBtn.Width = 110;
+            removeBtn.Dock = DockStyle.Right;
+            removeBtn.Width = 120;
             removeBtn.Click += RemoveBtn_Click;
-            btnPanel.Controls.Add(closeBtn);
+            // Docking priority is the REVERSE of add order (the control added LAST claims its
+            // strip FIRST) - removeBtn is added before closeBtn so closeBtn ends up on the far
+            // right and removeBtn immediately to its left, matching the original layout.
             btnPanel.Controls.Add(removeBtn);
+            btnPanel.Controls.Add(closeBtn);
             root.Controls.Add(btnPanel, 0, 4);
 
             Controls.Add(root);
