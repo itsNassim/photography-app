@@ -31,6 +31,68 @@ namespace PhotoStudioApp.Services
         private readonly DailyCloseRepository _closeRepo = new DailyCloseRepository();
         private readonly SettingsRepository _settingsRepo = new SettingsRepository();
 
+        /// <summary>Computes exactly what CloseDay would bill for the day RIGHT NOW - every
+        /// active category's current photo count (and how many of those are reject/duplicate-
+        /// prefixed and would be purged), today's custom charges, today's expenses, and the
+        /// resulting totals - WITHOUT any of CloseDay's side effects: nothing is purged, moved,
+        /// archived, saved to the database, or advanced. The returned DailyClose is never
+        /// persisted (Id stays 0, ArchiveFolderPath stays null) - it exists purely to reuse the
+        /// exact same breakdown/print screen (BreakdownReportForm) a real close uses, so a
+        /// studio owner can check today's running total at any time without actually closing.
+        /// The caller is responsible for the admin-password check (see AuthGate) - this itself
+        /// has no side effect that needs protecting, but the UI gates it anyway so the check gets
+        /// recorded in the login log, same as every other protected action.</summary>
+        public DailyClose PreviewCurrentState()
+        {
+            var settings = _settingsRepo.LoadAll();
+            var categories = _categoryRepo.GetActiveFolderCategories();
+            string[] purgedPrefixes = FolderCountService.ParsePrefixCsv(settings.PurgedFilePrefixesCsv);
+
+            var close = new DailyClose
+            {
+                CloseDate = settings.CurrentWorkDate,
+                ClosedAt = DateTime.Now
+            };
+
+            foreach (var cat in categories)
+            {
+                string catAbs = string.IsNullOrWhiteSpace(settings.StudioRootPath)
+                    ? null
+                    : Path.Combine(settings.StudioRootPath, cat.FolderRelativePath);
+
+                int count = 0;
+                int purged = 0;
+                if (catAbs != null && Directory.Exists(catAbs))
+                {
+                    count = _folders.CountPhotos(catAbs);
+                    purged = _folders.CountFilesWithPrefixes(catAbs, purgedPrefixes);
+                }
+
+                close.LineItems.Add(new DailyCloseLineItem
+                {
+                    CategoryId = cat.Id,
+                    CategoryName = cat.Name,
+                    Count = count,
+                    UnitPrice = cat.CurrentPrice,
+                    PurgedCount = purged
+                });
+            }
+
+            var charges = _chargeRepo.GetForWorkDate(settings.CurrentWorkDate);
+            foreach (var c in charges)
+                close.CustomCharges.Add(new DailyCloseCustomChargeSnapshot { Description = c.Description, Amount = c.Amount });
+
+            var expenses = _expenseRepo.GetForWorkDate(settings.CurrentWorkDate);
+            foreach (var ex in expenses)
+                close.Expenses.Add(new DailyCloseExpenseSnapshot { Description = ex.Description, Amount = ex.Amount });
+
+            close.GrandTotal = close.LineItems.Sum(li => li.Subtotal) + close.CustomCharges.Sum(c => c.Amount);
+            close.TotalExpenses = close.Expenses.Sum(ex => ex.Amount);
+            close.NetTotal = close.GrandTotal - close.TotalExpenses;
+
+            return close;
+        }
+
         /// <summary>Runs the full close-day workflow. The password must already have been
         /// verified by the caller before this is invoked. Pass confirmedEmptyDay=true to proceed
         /// even when no photos and no custom charges were found (after the caller has asked the

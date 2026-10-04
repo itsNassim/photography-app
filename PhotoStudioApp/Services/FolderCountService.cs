@@ -58,19 +58,9 @@ namespace PhotoStudioApp.Services
         /// only used for that log entry - pass null if the caller doesn't have one).</summary>
         public int DeleteFilesWithPrefixes(string absoluteFolderPath, string categoryName, params string[] prefixes)
         {
-            if (!Directory.Exists(absoluteFolderPath) || prefixes == null || prefixes.Length == 0)
-                return 0;
-
-            // 1) Calculate first: find and count every matching file up front, as a stable
-            //    snapshot, before deleting anything.
-            var matchingFiles = Directory.EnumerateFiles(absoluteFolderPath)
-                .Where(file =>
-                {
-                    string name = Path.GetFileName(file);
-                    return prefixes.Any(p => !string.IsNullOrEmpty(p) &&
-                        name.StartsWith(p, StringComparison.OrdinalIgnoreCase));
-                })
-                .ToList();
+            // 1) Calculate first: find every matching file up front, as a stable snapshot,
+            //    before deleting anything.
+            var matchingFiles = FindFilesWithPrefixes(absoluteFolderPath, prefixes);
 
             // 2) Only now delete what was calculated above - sent to the Recycle Bin rather
             //    than deleted permanently, so a wrongly-configured prefix doesn't cause
@@ -83,6 +73,34 @@ namespace PhotoStudioApp.Services
             }
 
             return matchingFiles.Count;
+        }
+
+        /// <summary>Same matching rules as DeleteFilesWithPrefixes, but read-only - counts how
+        /// many files WOULD be purged without touching anything. Used by
+        /// ClosingService.PreviewCurrentState so the "Voir l'état actuel" preview can show an
+        /// accurate PurgedCount without actually deleting/recycling anything.</summary>
+        public int CountFilesWithPrefixes(string absoluteFolderPath, params string[] prefixes)
+        {
+            return FindFilesWithPrefixes(absoluteFolderPath, prefixes).Count;
+        }
+
+        /// <summary>Shared matching logic for DeleteFilesWithPrefixes/CountFilesWithPrefixes:
+        /// every file directly inside the folder whose name starts with one of prefixes
+        /// (case-insensitive). Empty list (not an error) if the folder doesn't exist or no
+        /// prefixes were given.</summary>
+        private static List<string> FindFilesWithPrefixes(string absoluteFolderPath, string[] prefixes)
+        {
+            if (!Directory.Exists(absoluteFolderPath) || prefixes == null || prefixes.Length == 0)
+                return new List<string>();
+
+            return Directory.EnumerateFiles(absoluteFolderPath)
+                .Where(file =>
+                {
+                    string name = Path.GetFileName(file);
+                    return prefixes.Any(p => !string.IsNullOrEmpty(p) &&
+                        name.StartsWith(p, StringComparison.OrdinalIgnoreCase));
+                })
+                .ToList();
         }
 
         /// <summary>Moves every photo file from source into destination (creating destination if

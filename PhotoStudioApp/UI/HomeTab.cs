@@ -231,7 +231,12 @@ namespace PhotoStudioApp.UI
             expensesOuter.Controls.Add(expensesPanel, 0, 1);
             root.Controls.Add(expensesOuter, 0, 4);
 
-            // --- Pied de page : bouton Clôturer la journée (pas d'apercu de total, sur demande) ---
+            // --- Pied de page : bouton Clôturer la journée (pas d'apercu de total par defaut -
+            //     voir le bouton "Voir l'état actuel" juste a cote pour ca, sur demande) ---
+            // FlowLayoutPanel + RightToLeft lays children out starting from the right: the
+            // FIRST-added control (closeDayBtn) ends up rightmost, with each later-added one
+            // placed to its left - so closeDayBtn stays the rightmost/most prominent action and
+            // viewStateBtn appears right next to it, to its left.
             var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Margin = new Padding(0, 12, 0, 0) };
             var closeDayBtn = Theme.MakePrimaryButton("Clôturer la journée");
             closeDayBtn.Image = IconGlyphs.Lock(18);
@@ -240,7 +245,16 @@ namespace PhotoStudioApp.UI
             closeDayBtn.Width = 240;
             closeDayBtn.Height = 46;
             closeDayBtn.Click += CloseDayBtn_Click;
+            var viewStateBtn = Theme.MakeSecondaryButton("Voir l'état actuel");
+            viewStateBtn.Image = IconGlyphs.Lock(18);
+            viewStateBtn.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            viewStateBtn.TextImageRelation = TextImageRelation.ImageBeforeText;
+            viewStateBtn.Width = 220;
+            viewStateBtn.Height = 46;
+            viewStateBtn.Margin = new Padding(0, 0, 10, 0);
+            viewStateBtn.Click += ViewCurrentStateBtn_Click;
             footer.Controls.Add(closeDayBtn);
+            footer.Controls.Add(viewStateBtn);
             root.Controls.Add(footer, 0, 5);
 
             scrollPanel.Controls.Add(root);
@@ -928,6 +942,29 @@ namespace PhotoStudioApp.UI
 
             _chargeRepo.Delete(id);
             RefreshCharges();
+        }
+
+        /// <summary>Shows what today's totals currently look like - exactly the same breakdown
+        /// screen as an actual close, computed live - WITHOUT closing the day: nothing is
+        /// purged, moved, archived, or saved, and the work date doesn't advance. Password-
+        /// protected like Clôturer la journée, so the check itself is recorded in the login log
+        /// even though the action it protects has no side effect of its own to log.</summary>
+        private void ViewCurrentStateBtn_Click(object sender, EventArgs e)
+        {
+            if (!AuthGate.RequireAdminPassword(this, "Voir l'état actuel (sans clôturer)", "Voir l'état actuel"))
+                return;
+
+            try
+            {
+                var preview = _closingService.PreviewCurrentState();
+                using (var breakdown = new BreakdownReportForm(preview, isPreview: true))
+                    breakdown.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Une erreur inattendue est survenue lors du calcul de l'état actuel :\n" + ex.Message,
+                    "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void CloseDayBtn_Click(object sender, EventArgs e)

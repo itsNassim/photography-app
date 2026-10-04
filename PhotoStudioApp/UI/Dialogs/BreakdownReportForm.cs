@@ -9,12 +9,20 @@ namespace PhotoStudioApp.UI.Dialogs
     public class BreakdownReportForm : Form
     {
         private readonly DailyClose _close;
+        private readonly bool _isPreview;
         private readonly ReportPrintService _printService = new ReportPrintService();
 
-        public BreakdownReportForm(DailyClose close)
+        /// <summary>isPreview=true is for ClosingService.PreviewCurrentState's result: a
+        /// DailyClose computed live for "Voir l'état actuel" that was never actually closed/
+        /// archived/saved - the title and report header say so plainly, so it's never mistaken
+        /// for an actual closed-day record.</summary>
+        public BreakdownReportForm(DailyClose close, bool isPreview = false)
         {
             _close = close;
-            Text = $"Rapport du jour - {close.CloseDate}";
+            _isPreview = isPreview;
+            Text = isPreview
+                ? $"Aperçu de l'état actuel (journée non clôturée) - {close.CloseDate}"
+                : $"Rapport du jour - {close.CloseDate}";
             Width = 560;
             Height = 620;
             FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -34,8 +42,26 @@ namespace PhotoStudioApp.UI.Dialogs
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-            var title = new Label { Text = $"Rapport du jour - {_close.CloseDate}", Font = Theme.FontHeading, AutoSize = true, Margin = new Padding(0, 0, 0, 10) };
-            root.Controls.Add(title, 0, 0);
+            // Title (+ an extra notice line when this is a live preview, not an actual closed
+            // day) stacked in a small top-down panel, so both sit in row 0 and the textbox/
+            // buttons rows below never need to shift.
+            var header = new FlowLayoutPanel { Dock = DockStyle.Top, FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false };
+            header.Controls.Add(new Label
+            {
+                Text = _isPreview
+                    ? $"Aperçu de l'état actuel (non clôturé) - {_close.CloseDate}"
+                    : $"Rapport du jour - {_close.CloseDate}",
+                Font = Theme.FontHeading, AutoSize = true, Margin = new Padding(0, 0, 0, _isPreview ? 4 : 10)
+            });
+            if (_isPreview)
+            {
+                header.Controls.Add(new Label
+                {
+                    Text = "Ceci est un aperçu des montants actuels - rien n'a été archivé ni enregistré. Fermez simplement cette fenêtre pour continuer la journée normalement.",
+                    AutoSize = true, ForeColor = System.Drawing.Color.Gray, Margin = new Padding(0, 0, 0, 10), MaximumSize = new System.Drawing.Size(500, 0)
+                });
+            }
+            root.Controls.Add(header, 0, 0);
 
             var textBox = new TextBox
             {
@@ -73,9 +99,18 @@ namespace PhotoStudioApp.UI.Dialogs
         private string BuildReportText()
         {
             var sb = new StringBuilder();
-            sb.AppendLine("STUDIO PHOTO - RAPPORT DU JOUR");
-            sb.AppendLine($"Date : {_close.CloseDate}");
-            sb.AppendLine($"Clôture le : {_close.ClosedAt:g}");
+            if (_isPreview)
+            {
+                sb.AppendLine("STUDIO PHOTO - APERÇU DE L'ÉTAT ACTUEL (JOURNÉE NON CLÔTURÉE)");
+                sb.AppendLine($"Date (journée en cours) : {_close.CloseDate}");
+                sb.AppendLine($"Aperçu généré le : {_close.ClosedAt:g}");
+            }
+            else
+            {
+                sb.AppendLine("STUDIO PHOTO - RAPPORT DU JOUR");
+                sb.AppendLine($"Date : {_close.CloseDate}");
+                sb.AppendLine($"Clôture le : {_close.ClosedAt:g}");
+            }
             sb.AppendLine(new string('-', 46));
 
             foreach (var li in _close.LineItems)
@@ -114,7 +149,7 @@ namespace PhotoStudioApp.UI.Dialogs
         {
             try
             {
-                _printService.ShowPrintDialogAndPrint(_close);
+                _printService.ShowPrintDialogAndPrint(_close, _isPreview);
             }
             catch (Exception ex)
             {
@@ -127,14 +162,14 @@ namespace PhotoStudioApp.UI.Dialogs
             using (var dlg = new SaveFileDialog
             {
                 Filter = "Fichier PDF (*.pdf)|*.pdf",
-                FileName = $"RapportDuJour_{_close.CloseDate}.pdf"
+                FileName = _isPreview ? $"ApercuEtatActuel_{_close.CloseDate}.pdf" : $"RapportDuJour_{_close.CloseDate}.pdf"
             })
             {
                 if (dlg.ShowDialog() != DialogResult.OK) return;
 
                 try
                 {
-                    _printService.ExportToPdf(_close, dlg.FileName);
+                    _printService.ExportToPdf(_close, dlg.FileName, _isPreview);
                     MessageBox.Show("PDF exporté avec succès.", "Termine", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception ex)

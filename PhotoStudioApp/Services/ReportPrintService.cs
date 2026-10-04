@@ -13,6 +13,7 @@ namespace PhotoStudioApp.Services
     public class ReportPrintService
     {
         private DailyClose _close;
+        private bool _isPreview;
         private MonthSummary _monthSummary;
         private List<DailyClose> _monthDays;
         private List<MonthlyExpense> _monthExpenses;
@@ -20,22 +21,26 @@ namespace PhotoStudioApp.Services
         private readonly Font _bodyFont = new Font("Consolas", 10);
         private readonly Font _totalFont = new Font("Consolas", 12, FontStyle.Bold);
 
-        public PrintDocument BuildDocument(DailyClose close)
+        /// <summary>isPreview=true renders ClosingService.PreviewCurrentState's result (a live,
+        /// never-saved snapshot of today's running total) with wording that makes clear it's
+        /// not an actual closed-day record - see Doc_PrintPage.</summary>
+        public PrintDocument BuildDocument(DailyClose close, bool isPreview = false)
         {
             _close = close;
+            _isPreview = isPreview;
             _monthSummary = null;
             _monthDays = null;
             _monthExpenses = null;
             var doc = new PrintDocument();
-            doc.DocumentName = $"Rapport du jour - {close.CloseDate}";
+            doc.DocumentName = isPreview ? $"Aperçu de l'état actuel - {close.CloseDate}" : $"Rapport du jour - {close.CloseDate}";
             doc.PrintPage += Doc_PrintPage;
             return doc;
         }
 
         /// <summary>Shows the standard Windows print dialog then prints if confirmed.</summary>
-        public bool ShowPrintDialogAndPrint(DailyClose close)
+        public bool ShowPrintDialogAndPrint(DailyClose close, bool isPreview = false)
         {
-            var doc = BuildDocument(close);
+            var doc = BuildDocument(close, isPreview);
             using (var dlg = new PrintDialog { Document = doc, AllowSomePages = false, AllowSelection = false })
             {
                 if (dlg.ShowDialog() != DialogResult.OK)
@@ -110,9 +115,10 @@ namespace PhotoStudioApp.Services
         /// <summary>Exports to PDF by printing to the built-in "Microsoft Print to PDF" driver,
         /// if present on the machine (standard on Windows 8.1+; on Windows 7 it may be absent,
         /// in which case this throws and the caller should fall back to Print only).</summary>
-        public void ExportToPdf(DailyClose close, string outputPdfPath)
+        public void ExportToPdf(DailyClose close, string outputPdfPath, bool isPreview = false)
         {
             _close = close;
+            _isPreview = isPreview;
             const string pdfPrinterName = "Microsoft Print to PDF";
 
             bool found = false;
@@ -146,11 +152,11 @@ namespace PhotoStudioApp.Services
             float x = 40;
             float lineHeight = 22;
 
-            g.DrawString("STUDIO PHOTO - RAPPORT DU JOUR", _titleFont, Brushes.Black, x, y);
+            g.DrawString(_isPreview ? "STUDIO PHOTO - APERÇU DE L'ÉTAT ACTUEL (NON CLÔTURÉ)" : "STUDIO PHOTO - RAPPORT DU JOUR", _titleFont, Brushes.Black, x, y);
             y += lineHeight + 6;
-            g.DrawString($"Date : {_close.CloseDate}", _bodyFont, Brushes.Black, x, y);
+            g.DrawString(_isPreview ? $"Date (journée en cours) : {_close.CloseDate}" : $"Date : {_close.CloseDate}", _bodyFont, Brushes.Black, x, y);
             y += lineHeight;
-            g.DrawString($"Clôture le : {_close.ClosedAt:g}", _bodyFont, Brushes.Black, x, y);
+            g.DrawString(_isPreview ? $"Aperçu généré le : {_close.ClosedAt:g}" : $"Clôture le : {_close.ClosedAt:g}", _bodyFont, Brushes.Black, x, y);
             y += lineHeight + 10;
 
             g.DrawLine(Pens.Black, x, y, e.PageBounds.Width - x, y);

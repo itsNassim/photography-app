@@ -155,6 +155,52 @@ namespace PhotoStudioApp.Data
             }
         }
 
+        /// <summary>Permanently deletes a category, its price history, and any CategoryAddOn
+        /// links where it's the parent or an offered extra. Refuses (throws
+        /// InvalidOperationException) if the category has any PENDING, not-yet-closed custom
+        /// charge today referencing it - close the day or remove those charges first. Already
+        /// CLOSED days are never affected: DailyCloseLineItems stores CategoryName/UnitPrice as
+        /// plain snapshotted text/values with no foreign key back to Categories, so every past
+        /// archived report stays exactly as it was, forever, even after the category itself is
+        /// gone.</summary>
+        public void Delete(int categoryId)
+        {
+            using (var conn = Db.OpenConnection())
+            using (var tx = conn.BeginTransaction())
+            {
+                using (var check = new SQLiteCommand(
+                    "SELECT COUNT(*) FROM CustomCharges WHERE LinkedCategoryId=@id;", conn, tx))
+                {
+                    check.Parameters.AddWithValue("@id", categoryId);
+                    long pendingCharges = (long)check.ExecuteScalar();
+                    if (pendingCharges > 0)
+                        throw new InvalidOperationException(
+                            "Cette catégorie a des charges additionnelles non encore clôturées aujourd'hui. " +
+                            "Clôturez la journée ou supprimez ces charges avant de supprimer la catégorie.");
+                }
+
+                using (var cmd = new SQLiteCommand(
+                    "DELETE FROM CategoryAddOns WHERE ParentCategoryId=@id OR AddOnCategoryId=@id;", conn, tx))
+                {
+                    cmd.Parameters.AddWithValue("@id", categoryId);
+                    cmd.ExecuteNonQuery();
+                }
+                using (var cmd = new SQLiteCommand(
+                    "DELETE FROM CategoryPriceHistory WHERE CategoryId=@id;", conn, tx))
+                {
+                    cmd.Parameters.AddWithValue("@id", categoryId);
+                    cmd.ExecuteNonQuery();
+                }
+                using (var cmd = new SQLiteCommand("DELETE FROM Categories WHERE Id=@id;", conn, tx))
+                {
+                    cmd.Parameters.AddWithValue("@id", categoryId);
+                    cmd.ExecuteNonQuery();
+                }
+
+                tx.Commit();
+            }
+        }
+
         public void RenameCategory(int categoryId, string newName)
         {
             using (var conn = Db.OpenConnection())

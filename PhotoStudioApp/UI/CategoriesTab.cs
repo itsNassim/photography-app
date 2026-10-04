@@ -53,6 +53,9 @@ namespace PhotoStudioApp.UI
             var addOnsBtn = Theme.MakeSecondaryButton("Extras...");
             addOnsBtn.Width = 120;
             addOnsBtn.Click += AddOnsBtn_Click;
+            var deleteBtn = Theme.MakeDangerButton("Supprimer");
+            deleteBtn.Width = 120;
+            deleteBtn.Click += DeleteBtn_Click;
             var exportBtn = Theme.MakeSecondaryButton("Exporter");
             exportBtn.Width = 110;
             exportBtn.Click += ExportBtn_Click;
@@ -65,6 +68,7 @@ namespace PhotoStudioApp.UI
             toolbar.Controls.Add(editBtn);
             toolbar.Controls.Add(toggleBtn);
             toolbar.Controls.Add(addOnsBtn);
+            toolbar.Controls.Add(deleteBtn);
             toolbar.Controls.Add(exportBtn);
             toolbar.Controls.Add(importBtn);
             root.Controls.Add(toolbar, 0, 1);
@@ -187,6 +191,45 @@ namespace PhotoStudioApp.UI
             using (var dlg = new ManageCategoryAddOnsDialog(cat))
                 dlg.ShowDialog(this);
             RefreshAll();
+        }
+
+        /// <summary>Permanently removes a category (and its price history/extras links) - see
+        /// CategoryRepository.Delete. Unlike Activer/Desactiver (a safe, reversible soft-delete),
+        /// this is irreversible, so it gets the same password + double-confirmation pattern as
+        /// every other irreversible action in the app (e.g. HistoryTab's "Tout supprimer").
+        /// Categories referenced by already-closed days are completely unaffected - those reports
+        /// keep the category's name/price exactly as they were, with no link back to this row.</summary>
+        private void DeleteBtn_Click(object sender, EventArgs e)
+        {
+            var cat = Selected();
+            if (cat == null) return;
+            if (!AuthGate.RequireAdminPassword(this, "Supprimer une catégorie", "Supprimer")) return;
+
+            if (MessageBox.Show(
+                $"Supprimer DEFINITIVEMENT la catégorie '{cat.Name}' ?\n\n" +
+                "Les journées déjà clôturées qui la mentionnent ne sont PAS affectées - elles gardent " +
+                "son nom et son prix tels qu'ils étaient ce jour-la. Seuls l'historique des prix de " +
+                "cette catégorie et ses extras éventuels (en tant que parent ou comme extra d'une autre " +
+                "catégorie) sont supprimés avec elle.",
+                "Confirmer la suppression", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                return;
+
+            using (var confirm = new TypeToConfirmDialog(
+                $"Vous etes sur le point de supprimer DEFINITIVEMENT la catégorie '{cat.Name}'.", "SUPPRIMER"))
+            {
+                if (confirm.ShowDialog(this) != DialogResult.OK)
+                    return;
+            }
+
+            try
+            {
+                _repo.Delete(cat.Id);
+                RefreshAll();
+            }
+            catch (InvalidOperationException ex)
+            {
+                MessageBox.Show(ex.Message, "Suppression impossible", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         private void ToggleBtn_Click(object sender, EventArgs e)
