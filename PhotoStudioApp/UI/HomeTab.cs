@@ -112,7 +112,10 @@ namespace PhotoStudioApp.UI
             };
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 300));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 210));
+            // Charges additionnelles gets the most room of the lower sections (was 210): with
+            // optional extras, one sale can now add several lines at once, so a short list
+            // meant constant scrolling inside the grid.
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 400));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 170));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 170));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
